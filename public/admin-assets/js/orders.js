@@ -1,247 +1,197 @@
-/* Orders: filtered server-side list + detail drawer (status, tracking, gateway actions). */
+/* Orders — fulfillment list + full-page order workspace. Status, payment and inventory rules
+   are untouched: every action calls the same server endpoints as before. */
 (function () {
   "use strict";
-  const { html, raw, set, $, $$, num, money, icon, api, router, dateTime, ago, orderBadge, payBadge, sourceBadge, channelLabel, busy, confirm, toast, fail, boot } = OA;
-
+  const { html, raw, set, $, $$, num, money, icon, api, router, date, dateTime, ago, orderChip, payChip, source, channelLabel, busy, confirm, toast, boot, attr } = OA;
   const STATUSES = boot.orderStatuses || [];
-  let listApi = null;
-  let openDrawer = null;
 
-  function render(el, { args }) {
-    const channels = Object.keys(boot.channels || {});
+  // ------------------------------------------------------------------ list
+  function renderList(el) {
     const q = router.query();
-    set(el, html`${OA.pageHead("سفارش‌ها", "جستجو، پیگیری و پردازش سفارش‌ها", html`<button class="oa-btn" type="button" data-date>${icon("calendar", "oa-icon--sm")} <span data-date-label>${q.from ? `${OA.dayLong(q.from)} تا ${OA.dayLong(q.to)}` : q.days ? `${num(q.days)} روز اخیر` : "همه تاریخ‌ها"}</span></button>`)}<div data-list></div>`);
+    const channels = Object.keys(boot.channels || {});
+    const rangeLabel = () => { const s = listApi && listApi.state; const r = s || q; return r.from ? `${OA.dayLong(r.from)} تا ${OA.dayLong(r.to)}` : r.days ? `${num(r.days)} روز اخیر` : "همه تاریخ‌ها"; };
+    set(el, html`${OA.pageHead({ title: "سفارش‌ها", count: "", subtitle: "پیگیری، پردازش و ارسال سفارش‌ها", actions: html`<button class="ox-btn" type="button" data-date>${icon("calendar", "ox-i--s")}<span data-date-label></span></button>` })}<div data-list></div>`);
+    let listApi = null;
     listApi = OA.list($("[data-list]", el), {
       endpoint: "/orders",
-      defaults: { status: "" },
-      searchPlaceholder: "شماره سفارش، نام، موبایل، کد رهگیری…",
+      defaults: { status: "", sort: "newest" },
+      searchPlaceholder: "شماره سفارش، نام، موبایل، کد پستی یا رهگیری…",
       tabs: {
         name: "status",
-        countsKey: "statusCounts",
-        options: [["", "همه"], ["needs_action", "نیازمند اقدام"], ...STATUSES.map((s) => [s, s])],
-        count: (counts, v) => (v === "" ? Object.values(counts).reduce((a, b) => a + b, 0) : v === "needs_action" ? (counts["در حال پردازش"] || 0) + (counts["بسته بندی شده"] || 0) : counts[v] || 0),
+        options: [["", "همه"], ["needs_action", "نیازمند اقدام"], ["در انتظار پرداخت", "در انتظار پرداخت"], ["در حال پردازش", "در حال پردازش"], ["بسته بندی شده", "بسته‌بندی"], ["در حال ارسال", "در حال ارسال"], ["تحویل داده شد", "تکمیل شده"], ["لغو شده", "لغو شده"]],
+        count: (d, v) => { const c = d.statusCounts || {}; return v === "" ? Object.values(c).reduce((a, b) => a + b, 0) : v === "needs_action" ? (c["در حال پردازش"] || 0) + (c["بسته بندی شده"] || 0) : c[v] || 0; },
       },
       filters: [
         { name: "paymentStatus", label: "وضعیت پرداخت", options: [["", "همه پرداخت‌ها"], ...(boot.paymentStatuses || []).map((s) => [s, s])] },
-        { name: "paymentMethod", label: "روش پرداخت", options: [["", "همه روش‌ها"], ...(boot.paymentMethods || []).map((s) => [s, s])] },
+        { name: "paymentMethod", label: "روش پرداخت", options: [["", "همه روش‌های پرداخت"], ...(boot.paymentMethods || []).map((s) => [s, s])] },
         { name: "delivery", label: "روش ارسال", options: [["", "همه روش‌های ارسال"], ...(boot.deliveryMethods || []).map((s) => [s, s.replace(/-/g, " ")])] },
-        { name: "source", label: "منبع جذب", options: [["", "همه منابع"], ...channels.map((c) => [c, channelLabel(c)])] },
+        { name: "source", label: "منبع جذب", options: [["", "همه منابع جذب"], ...channels.map((c) => [c, channelLabel(c)])] },
         { name: "sort", label: "مرتب‌سازی", options: [["newest", "جدیدترین"], ["oldest", "قدیمی‌ترین"], ["total_desc", "بیشترین مبلغ"], ["total_asc", "کمترین مبلغ"]] },
       ],
+      onData: (d) => { const c = $("[data-head-count]", el); if (c) c.textContent = `${num(d.total)} سفارش`; $("[data-date-label]", el).textContent = rangeLabel(); },
       columns: [
-        { label: "سفارش", cls: "col-main", main: true, render: (o) => html`<span class="oa-cell-title num">${o.OrderNum}</span><span class="oa-cell-sub">${dateTime(o.createdAt)}</span>` },
-        { label: "مشتری", render: (o) => html`<span class="oa-cell-title">${o.recipientName || o.user?.fullName || "—"}</span><span class="oa-cell-sub ltr">${o.recipientMobile || o.user?.mobile || ""}</span>` },
-        { label: "اقلام", render: (o) => html`<span class="num">${num(o.itemsCount)}</span>` },
-        { label: "مبلغ", render: (o) => html`<span class="num" style="font-weight:600">${money(o.totalPrice)}</span>` },
-        { label: "وضعیت", render: (o) => orderBadge(o.status) },
-        { label: "پرداخت", render: (o) => html`${payBadge(o.paymentStatus)}<span class="oa-cell-sub">${o.paymentMethod}</span>` },
-        { label: "منبع", render: (o) => sourceBadge(o.source) },
+        { label: "سفارش", render: (o) => html`<span class="ox-ref" style="font-size:13.5px">${o.OrderNum}</span><span class="ox-cell-sub">${date(o.createdAt)} · ${OA.time(o.createdAt)}</span>` },
+        { label: "مشتری", render: (o) => html`<span class="ox-cell-main">${o.recipientName || o.user?.fullName || "—"}</span><span class="ox-cell-sub ltr">${o.recipientMobile || o.user?.mobile || ""}</span>` },
+        { label: "اقلام", cls: "col-num-start", render: (o) => html`${num(o.itemsCount)} قلم` },
+        { label: "مبلغ", cls: "col-num", render: (o) => html`<span class="strong">${money(o.totalPrice)}</span>` },
+        { label: "پرداخت", render: (o) => html`${payChip(o.paymentStatus)}<span class="ox-cell-sub">${o.paymentMethod}</span>` },
+        { label: "وضعیت", render: (o) => orderChip(o.status) },
+        { label: "منبع جذب", render: (o) => source(o.source) },
       ],
-      onRow: (o) => router.go("orders", [o._id], router.query()),
-      empty: () => OA.empty("سفارشی با این مشخصات پیدا نشد", "فیلترها یا عبارت جستجو را تغییر دهید.", "bag"),
+      record: (o) => html`<div class="ox-record__top"><div class="ox-record__main"><span class="ox-ref">${o.OrderNum}</span><span class="ox-cell-sub">${o.recipientName || o.user?.fullName || "—"} · ${ago(o.createdAt)}</span></div><div class="ox-record__side"><b class="num">${money(o.totalPrice)}</b></div></div>
+        <div class="ox-record__row"><span class="ox-row" style="gap:6px">${orderChip(o.status)}${payChip(o.paymentStatus)}</span><button class="ox-btn ox-btn--sm" type="button" data-open>باز کردن</button></div>
+        <details><summary>جزئیات بیشتر</summary><dl><dt>موبایل</dt><dd class="ltr">${o.recipientMobile || o.user?.mobile || "—"}</dd><dt>اقلام</dt><dd>${num(o.itemsCount)}</dd><dt>روش پرداخت</dt><dd>${o.paymentMethod}</dd><dt>منبع</dt><dd>${channelLabel(o.source || "unknown")}</dd></dl></details>`,
+      actions: (o) => [{ label: "باز کردن سفارش", icon: "eye", run: () => router.go("orders", [o._id]) }, o.user?._id && OA.can("manage_users") ? { label: "پروفایل مشتری", icon: "user", run: () => router.go("customers", [o.user._id]) } : null],
+      onRow: (o) => router.go("orders", [o._id]),
+      bind: (row, o) => { const b = $("[data-open]", row); if (b) b.addEventListener("click", () => router.go("orders", [o._id])); },
+      empty: () => OA.empty({ icon: "bag", title: "سفارشی با این مشخصات پیدا نشد", text: "فیلترها یا عبارت جستجو را تغییر دهید." }),
     });
-    $("[data-date]", el).addEventListener("click", () => pickDates(el));
-    if (args[0]) openOrder(args[0]);
+    $("[data-date-label]", el).textContent = rangeLabel();
+    $("[data-date]", el).addEventListener("click", () => {
+      let picked = listApi.state.from ? { from: listApi.state.from, to: listApi.state.to } : listApi.state.days ? { days: listApi.state.days } : { days: "30" };
+      const m = OA.modal({ title: "بازه تاریخ سفارش", sub: "بر اساس تاریخ ثبت سفارش (وقت تهران)", iconName: "calendar", body: html`<div data-r></div>`, foot: html`<button class="ox-btn" type="button" data-all>همه تاریخ‌ها</button><button class="ox-btn ox-btn--primary" type="button" data-ok>اعمال</button>` });
+      OA.rangePicker($("[data-r]", m.el), picked, (r) => (picked = r));
+      const apply = (r) => { ["from", "to", "days"].forEach((k) => delete listApi.state[k]); Object.assign(listApi.state, r || {}); listApi.state.page = 1; listApi.reload(); m.close(true); };
+      $("[data-ok]", m.el).addEventListener("click", () => apply(picked));
+      $("[data-all]", m.el).addEventListener("click", () => apply(null));
+    });
   }
 
-  function pickDates(el) {
-    const q = router.query();
-    let picked = q.from ? { from: q.from, to: q.to } : q.days ? { days: q.days } : null;
-    const m = OA.modal({
-      title: "بازه تاریخ سفارش",
-      body: html`<div data-r></div><p class="oa-help" style="margin-top:12px">بازه بر اساس تاریخ ثبت سفارش (به وقت تهران) اعمال می‌شود.</p>`,
-      foot: html`<button class="oa-btn" data-clear>همه تاریخ‌ها</button><button class="oa-btn oa-btn--primary" data-apply>اعمال</button>`,
-    });
-    OA.rangePicker($("[data-r]", m.el), picked || { days: "30" }, (r) => (picked = r));
-    const apply = (r) => {
-      ["from", "to", "days"].forEach((k) => delete listApi.state[k]);
-      Object.assign(listApi.state, r || {});
-      listApi.state.page = 1;
-      $("[data-date-label]", el).textContent = r ? (r.from ? `${OA.dayLong(r.from)} تا ${OA.dayLong(r.to)}` : `${num(r.days)} روز اخیر`) : "همه تاریخ‌ها";
-      listApi.reload();
-      m.close(true);
-    };
-    $("[data-apply]", m.el).addEventListener("click", () => apply(picked || { days: "30" }));
-    $("[data-clear]", m.el).addEventListener("click", () => apply(null));
-  }
-
-  // ------------------------------------------------------------- detail
-  async function openOrder(id) {
-    if (openDrawer) openDrawer.close(true);
-    const d = OA.drawer({ title: "جزئیات سفارش", size: "oa-drawer--wide", body: OA.skeletonRows(6), onClose: () => { openDrawer = null; if (router.parse().args[0]) router.go("orders", [], router.query()); } });
-    openDrawer = d;
+  // ------------------------------------------------------------- detail page
+  function renderDetail(el, id) {
+    set(el, html`${OA.workHead({ title: html`<span class="ox-skel" style="width:220px;height:26px;display:inline-block"></span>` })}<div class="ox-grid"><div class="c-8">${OA.skeletonBlock(320)}</div><div class="c-4">${OA.skeletonBlock(320)}</div></div>`);
     const load = async () => {
-      try {
-        const { order, activity } = await api(`/orders/${id}`);
-        $("h2", d.el).textContent = `سفارش ${order.OrderNum}`;
-        drawOrder(d, order, activity, load);
-      } catch (e) {
-        set(d.body, OA.errorBox(e, load));
-      }
+      try { const { order, activity } = await api(`/orders/${id}`); draw(el, order, activity, load); }
+      catch (e) { set(el, html`${OA.workHead({ title: "سفارش" })}${OA.errorBox(e, load)}`); }
     };
     load();
   }
 
-  const unit = (p) => Number(p.priceAtPurchase || 0);
-
-  function drawOrder(d, o, activity, reload) {
+  function draw(el, o, activity, reload) {
     const items = o.products || [];
-    const itemsTotal = items.reduce((s, p) => s + unit(p) * Number(p.quantity || 0), 0);
-    const originalTotal = items.reduce((s, p) => s + Number(p.originalUnitPrice || p.priceAtPurchase || 0) * Number(p.quantity || 0), 0);
-    const productDiscount = Math.max(0, originalTotal - itemsTotal);
+    const units = items.reduce((s, p) => s + Number(p.quantity || 0), 0);
+    const itemsTotal = items.reduce((s, p) => s + Number(p.priceAtPurchase || 0) * Number(p.quantity || 0), 0);
+    const listTotal = items.reduce((s, p) => s + Number(p.originalUnitPrice || p.priceAtPurchase || 0) * Number(p.quantity || 0), 0);
     const gateway = o.paymentMethod === "اسنپ‌پی" ? "snappay" : o.paymentMethod === "ترب‌پی" ? "torobpay" : "";
     const g = gateway === "snappay" ? o.snappPay || {} : gateway === "torobpay" ? o.torobPay || {} : null;
-    const acq = o.acquisition || null;
-    const touch = (t) => (t ? html`<dl class="oa-kv"><dt>منبع</dt><dd>${channelLabel(t.source)}</dd><dt>Medium</dt><dd class="ltr">${t.medium || "—"}</dd>${t.campaign ? html`<dt>کمپین</dt><dd class="ltr">${t.campaign}</dd>` : ""}${t.referrerHost ? html`<dt>ارجاع‌دهنده</dt><dd class="ltr">${t.referrerHost}</dd>` : ""}<dt>صفحه ورود</dt><dd class="ltr">${t.landingPage || "—"}</dd><dt>زمان</dt><dd>${dateTime(t.at)}</dd></dl>` : html`<span class="oa-muted">—</span>`);
-
+    const acq = o.acquisition;
     const timeline = [
       { at: o.createdAt, title: "ثبت سفارش", sub: `${o.paymentMethod} · ${money(o.totalPrice)}` },
-      ...(o.paymentInfo?.paymentDate ? [{ at: o.paymentInfo.paymentDate, title: "پرداخت تأیید شد", sub: o.paymentInfo.refId ? `کد پیگیری ${o.paymentInfo.refId}` : "" }] : []),
-      ...(g?.settledAt ? [{ at: g.settledAt, title: "تسویه در درگاه", sub: gateway }] : []),
-      ...(g?.cancelledAt ? [{ at: g.cancelledAt, title: "لغو در درگاه", sub: gateway }] : []),
-      ...(o.statusHistory || []).map((h) => ({ at: h.changedAt, title: `وضعیت: ${h.status}`, sub: [h.changedByName && `توسط ${h.changedByName}`, h.note].filter(Boolean).join(" · ") })),
-      ...((g?.updateHistory) || []).map((u) => ({ at: u.changedAt, title: "به‌روزرسانی مبلغ در درگاه", sub: `${money(Number(u.amount || 0) / 10)}` })),
-      ...(activity || []).filter((a) => a.action === "update_order_shipping").map((a) => ({ at: a.createdAtTimestamp, title: "کد رهگیری", sub: `${a.details} · ${a.adminName}` })),
+      ...(o.paymentInfo?.paymentDate ? [{ at: o.paymentInfo.paymentDate, title: "تأیید پرداخت", sub: o.paymentInfo.refId ? `کد پیگیری ${o.paymentInfo.refId}` : "" }] : []),
+      ...(g?.settledAt ? [{ at: g.settledAt, title: "تسویه در درگاه", sub: o.paymentMethod }] : []),
+      ...(g?.cancelledAt ? [{ at: g.cancelledAt, title: "لغو در درگاه", sub: o.paymentMethod }] : []),
+      ...(o.statusHistory || []).map((h) => ({ at: h.changedAt, title: h.status, sub: [h.changedByName && `توسط ${h.changedByName}`, h.note].filter(Boolean).join(" · ") })),
+      ...(g?.updateHistory || []).map((u) => ({ at: u.changedAt, title: "به‌روزرسانی مبلغ در درگاه", sub: money(Number(u.amount || 0) / 10) })),
+      ...(activity || []).filter((a) => a.action === "update_order_shipping").map((a) => ({ at: a.createdAtTimestamp, title: "ثبت کد رهگیری", sub: `${a.details} · ${a.adminName}` })),
     ].filter((x) => x.at).sort((a, b) => new Date(b.at) - new Date(a.at));
+    const touch = (label, t) => html`<div class="ox-touch"><div class="ox-touch__h"><span>${label}</span>${t ? OA.source(t.source) : ""}</div>${t ? html`<dl class="ox-kv" style="font-size:12.5px;gap:6px 14px">${t.medium ? html`<dt>مدیوم</dt><dd class="ltr">${t.medium}</dd>` : ""}${t.campaign ? html`<dt>کمپین</dt><dd class="ltr">${t.campaign}</dd>` : ""}${t.referrerHost ? html`<dt>ارجاع‌دهنده</dt><dd class="ltr">${t.referrerHost}</dd>` : ""}<dt>صفحه ورود</dt><dd class="ltr">${t.landingPage || "—"}</dd><dt>زمان</dt><dd>${dateTime(t.at)}</dd></dl>` : html`<span class="muted small">—</span>`}</div>`;
 
-    set(d.body, html`
-      <div class="oa-inline" style="margin-bottom:16px;gap:10px">${orderBadge(o.status)}${payBadge(o.paymentStatus)}<span class="oa-badge oa-badge--plain">${o.paymentMethod}</span><span class="oa-muted" style="font-size:12.5px">${dateTime(o.createdAt)}</span></div>
-      ${o.snappPay?.lastError || o.torobPay?.lastError ? html`<div class="oa-note oa-note--bad" style="margin-bottom:16px">${icon("alert")}<span>آخرین خطای درگاه: ${o.snappPay?.lastError || o.torobPay?.lastError}</span></div>` : ""}
-      <div class="oa-grid oa-grid--main">
-        <div class="oa-stack">
-          <section class="oa-card"><div class="oa-card__head"><h3>اقلام سفارش</h3><small>${num(items.reduce((s, p) => s + Number(p.quantity || 0), 0))} عدد</small></div>
-            <ul class="oa-list">${items.map((p) => html`<li>
-              ${p.product?.image ? html`<img class="oa-thumb" src="${p.product.image}" alt="" loading="lazy">` : html`<div class="oa-thumb"></div>`}
-              <div class="oa-list__main"><b>${p.nameAtPurchase}</b><span>${[p.selectedColor && `رنگ: ${p.selectedColor}`, p.selectedSize && `سایز: ${p.selectedSize}`, p.product?.sku && `SKU: ${p.product.sku}`].filter(Boolean).join(" · ") || "بدون تنوع"}${!p.product ? " · محصول حذف شده" : ""}</span></div>
-              <div style="text-align:end"><div class="num">${num(p.quantity)} × ${money(unit(p))}</div>${p.hadProductDiscount && p.originalUnitPrice ? html`<div class="oa-muted num" style="font-size:12px;text-decoration:line-through">${money(p.originalUnitPrice)}</div>` : ""}</div>
-            </li>`)}</ul>
-            <div class="oa-card__body" style="border-top:1px solid var(--oa-border)"><dl class="oa-kv">
-              <dt>جمع اقلام</dt><dd class="num">${money(itemsTotal)}</dd>
-              ${productDiscount ? html`<dt>تخفیف محصولات</dt><dd class="num">${money(productDiscount)} (در قیمت اقلام لحاظ شده)</dd>` : ""}
-              ${o.discountAmount ? html`<dt>کد تخفیف</dt><dd class="num oa-good">− ${money(o.discountAmount)} ${o.discount?.code ? html`<span class="oa-badge oa-badge--plain ltr">${o.discount.code}</span>` : ""}</dd>` : ""}
-              ${o.taxAmount ? html`<dt>مالیات / کارمزد</dt><dd class="num">${money(o.taxAmount)}</dd>` : ""}
-              ${o.externalSourceAmount ? html`<dt>پرداخت از منبع دیگر</dt><dd class="num">− ${money(o.externalSourceAmount)}</dd>` : ""}
-              <dt>هزینه ارسال</dt><dd class="oa-muted">پس‌کرایه (در مبلغ آنلاین نیست)</dd>
-              <dt><b>مبلغ نهایی</b></dt><dd class="num" style="font-weight:700;font-size:16px">${money(o.totalPrice)}</dd>
-            </dl></div>
-          </section>
+    set(el, html`
+      ${OA.workHead({
+        title: html`سفارش <span class="ox-ref" style="font-size:inherit">${o.OrderNum}</span>`,
+        meta: html`<span>${dateTime(o.createdAt)}</span>${orderChip(o.status)}${payChip(o.paymentStatus)}<span class="ox-tag">${o.paymentMethod}</span>`,
+        actions: html`${g ? html`<button class="ox-btn" type="button" data-gw="sync">${icon("refresh", "ox-i--s")}استعلام از ${o.paymentMethod}</button>` : ""}${o.user?._id && OA.can("manage_users") ? html`<a class="ox-btn" href="#/customers/${o.user._id}">${icon("user", "ox-i--s")}پروفایل مشتری</a>` : ""}`,
+      })}
+      ${o.snappPay?.lastError || o.torobPay?.lastError ? html`<div class="ox-note ox-note--danger" style="margin-bottom:20px">${icon("alert", "ox-i--s")}<span>آخرین خطای درگاه: ${o.snappPay?.lastError || o.torobPay?.lastError}</span></div>` : ""}
+      <div class="ox-grid">
+        <div class="c-8 ox-stack">
+          <section class="ox-panel"><div class="ox-panel__head ox-panel__head--line"><div class="ox-panel__title">${icon("box")}اقلام خریداری‌شده</div><span class="ox-panel__sub">${num(items.length)} ردیف · ${num(units)} عدد</span></div>
+            <div>${items.map((p) => html`<div class="ox-lineitem">
+              ${p.product?.image ? html`<img class="ox-thumb" src="${p.product.image}" alt="" loading="lazy">` : html`<span class="ox-thumb ox-thumb--empty">${icon("box")}</span>`}
+              <div style="min-width:0"><span class="ox-cell-main">${p.nameAtPurchase}</span><span class="ox-cell-sub">${[p.selectedColor && `رنگ ${p.selectedColor}`, p.selectedSize && `سایز ${p.selectedSize}`, p.product?.sku && `SKU ${p.product.sku}`].filter(Boolean).join(" · ") || "بدون تنوع"}${!p.product ? " · محصول حذف شده" : ""}</span></div>
+              <span class="num muted">${num(p.quantity)} × ${money(p.priceAtPurchase)}</span>
+              <span class="num strong">${money(Number(p.priceAtPurchase) * Number(p.quantity))}</span></div>`)}</div></section>
 
-          <section class="oa-card"><div class="oa-card__head"><h3>پرداخت</h3>${g ? html`<span class="oa-badge oa-badge--plain ltr">${g.status || "—"}</span>` : ""}</div><div class="oa-card__body">
-            <dl class="oa-kv">
-              <dt>روش</dt><dd>${o.paymentMethod}</dd>
-              <dt>وضعیت</dt><dd>${payBadge(o.paymentStatus)}</dd>
-              ${o.paymentInfo?.refId ? html`<dt>کد پیگیری</dt><dd class="ltr">${o.paymentInfo.refId}</dd>` : ""}
-              ${o.paymentInfo?.authority ? html`<dt>Authority</dt><dd class="ltr" style="font-size:12px">${o.paymentInfo.authority}</dd>` : ""}
-              ${o.paymentInfo?.cardPan ? html`<dt>کارت</dt><dd class="ltr">${o.paymentInfo.cardPan}</dd>` : ""}
-              ${o.paymentInfo?.paymentDate ? html`<dt>زمان پرداخت</dt><dd>${dateTime(o.paymentInfo.paymentDate)}</dd>` : ""}
-              ${g?.transactionId ? html`<dt>شناسه تراکنش</dt><dd class="ltr">${g.transactionId}</dd>` : ""}
-              ${g?.lastStatusCheckAt ? html`<dt>آخرین استعلام</dt><dd>${dateTime(g.lastStatusCheckAt)}</dd>` : ""}
-              <dt>موجودی</dt><dd>${o.inventoryRestored ? badge2("به انبار برگشت", "info") : o.inventoryReserved ? badge2("رزرو شده", "olive") : badge2("رزرو نشده", "")}</dd>
-            </dl>
-            ${g ? html`<div class="oa-inline" style="margin-top:16px">
-              <button class="oa-btn oa-btn--sm" data-gw="sync">${icon("refresh", "oa-icon--sm")} استعلام وضعیت از ${o.paymentMethod}</button>
-              <button class="oa-btn oa-btn--sm" data-gw="update">${icon("minus", "oa-icon--sm")} مرجوعی بخشی از اقلام</button>
-              <button class="oa-btn oa-btn--sm oa-btn--danger" data-gw="cancel">${icon("x", "oa-icon--sm")} لغو کامل و عودت وجه</button>
-            </div><p class="oa-help" style="margin:10px 0 0">این عملیات مستقیماً از طریق API ${o.paymentMethod} انجام می‌شود و وضعیت درگاه پیش از هر اقدام دوباره استعلام می‌گردد.</p>` : ""}
-          </div></section>
+          <section class="ox-panel"><div class="ox-panel__head ox-panel__head--line"><div class="ox-panel__title">${icon("receipt")}خلاصه پرداخت</div>${g ? html`<span class="ox-chip ox-chip--outline ox-chip--plain ltr">${g.status || "—"}</span>` : ""}</div>
+            <div class="ox-panel__body ox-grid" style="gap:28px">
+              <dl class="ox-sum c-6">
+                <dt>جمع اقلام</dt><dd>${money(itemsTotal)}</dd>
+                ${listTotal > itemsTotal ? html`<dt>تخفیف محصولات (در قیمت لحاظ شده)</dt><dd class="t-success">${money(listTotal - itemsTotal)}</dd>` : ""}
+                ${o.discountAmount ? html`<dt>کد تخفیف ${o.discount?.code ? html`<span class="ox-tag ltr">${o.discount.code}</span>` : ""}</dt><dd class="t-success">− ${money(o.discountAmount)}</dd>` : ""}
+                ${o.taxAmount ? html`<dt>مالیات / کارمزد</dt><dd>${money(o.taxAmount)}</dd>` : ""}
+                ${o.externalSourceAmount ? html`<dt>پرداخت از منبع دیگر</dt><dd>− ${money(o.externalSourceAmount)}</dd>` : ""}
+                <dt>هزینه ارسال</dt><dd class="muted" style="font-weight:500">پس‌کرایه</dd>
+                <dt class="total">مبلغ نهایی</dt><dd class="total">${money(o.totalPrice)}</dd>
+              </dl>
+              <dl class="ox-kv c-6" style="align-content:start">
+                <dt>درگاه</dt><dd>${o.paymentMethod}</dd><dt>وضعیت</dt><dd>${payChip(o.paymentStatus)}</dd>
+                ${o.paymentInfo?.refId ? html`<dt>کد پیگیری</dt><dd class="ltr">${o.paymentInfo.refId}</dd>` : ""}
+                ${o.paymentInfo?.cardPan ? html`<dt>کارت</dt><dd class="ltr">${o.paymentInfo.cardPan}</dd>` : ""}
+                ${o.paymentInfo?.paymentDate ? html`<dt>زمان پرداخت</dt><dd>${dateTime(o.paymentInfo.paymentDate)}</dd>` : ""}
+                ${g?.transactionId ? html`<dt>شناسه تراکنش</dt><dd class="ltr">${g.transactionId}</dd>` : ""}
+                ${g?.lastStatusCheckAt ? html`<dt>آخرین استعلام</dt><dd>${dateTime(g.lastStatusCheckAt)}</dd>` : ""}
+                <dt>موجودی</dt><dd>${o.inventoryRestored ? OA.chip("به انبار برگشت", "info") : o.inventoryReserved ? OA.chip("رزرو شده", "primary") : OA.chip("رزرو نشده")}</dd>
+              </dl></div></section>
 
-          <section class="oa-card"><div class="oa-card__head"><h3>تاریخچه سفارش</h3></div><div class="oa-card__body">
-            ${timeline.length ? html`<ol class="oa-timeline">${timeline.map((t) => html`<li><b>${t.title}</b><span>${dateTime(t.at)}${t.sub ? ` · ${t.sub}` : ""}</span></li>`)}</ol>` : html`<span class="oa-muted">—</span>`}
-          </div></section>
+          <section class="ox-panel"><div class="ox-panel__head ox-panel__head--line"><div class="ox-panel__title">${icon("activity")}تاریخچه سفارش</div></div><div class="ox-panel__body">
+            ${timeline.length ? html`<ol class="ox-timeline">${timeline.map((t) => html`<li><span class="ox-timeline__dot"></span><div><b>${t.title}</b><span>${dateTime(t.at)}${t.sub ? ` · ${t.sub}` : ""}</span></div></li>`)}</ol>` : html`<span class="muted">—</span>`}</div></section>
         </div>
 
-        <div class="oa-stack">
-          <section class="oa-card"><div class="oa-card__head"><h3>پردازش سفارش</h3></div><div class="oa-card__body oa-stack" style="gap:12px">
-            <label class="oa-field"><span>وضعیت سفارش</span><select class="oa-select" data-status>${STATUSES.map((s) => html`<option ${raw(s === o.status ? "selected" : "")}>${s}</option>`)}</select></label>
-            <label class="oa-field"><span>یادداشت تغییر وضعیت (اختیاری)</span><input class="oa-input" data-note maxlength="300" placeholder="مثلاً: تحویل پست شد"></label>
-            <button class="oa-btn oa-btn--primary" data-save-status>${icon("check", "oa-icon--sm")} ثبت وضعیت</button>
-            <hr class="oa-divider" style="margin:4px 0">
-            <label class="oa-field"><span>روش ارسال</span><input class="oa-input" value="${(o.delivery || "").replace(/-/g, " ")}" disabled></label>
-            <label class="oa-field"><span>کد رهگیری مرسوله</span><input class="oa-input ltr" style="text-align:left" data-tracking maxlength="60" value="${o.trackingNumber || ""}"></label>
-            <button class="oa-btn" data-save-tracking>${icon("truck", "oa-icon--sm")} ذخیره کد رهگیری</button>
+        <div class="c-4 ox-stack">
+          <section class="ox-panel" style="border-top:3px solid var(--primary)"><div class="ox-panel__head"><div class="ox-panel__title">${icon("truck")}پردازش و ارسال</div></div><div class="ox-panel__body ox-col" style="gap:14px">
+            ${OA.field({ label: "وضعیت سفارش", control: html`<select class="ox-select" data-status>${STATUSES.map((s) => html`<option ${attr(s === o.status, "selected")}>${s}</option>`)}</select>` })}
+            ${OA.field({ label: "یادداشت تغییر وضعیت", opt: true, control: html`<input class="ox-input" data-note maxlength="300" placeholder="مثلاً: تحویل پست شد">` })}
+            <button class="ox-btn ox-btn--primary ox-btn--block" type="button" data-save-status>${icon("check", "ox-i--s")}ثبت وضعیت</button>
+            <hr class="ox-sep" style="margin:4px 0">
+            <dl class="ox-kv"><dt>روش ارسال</dt><dd>${(o.delivery || "—").replace(/-/g, " ")}</dd></dl>
+            ${OA.field({ label: "کد رهگیری مرسوله", control: html`<div class="ox-row ox-row--nowrap"><input class="ox-input ox-input--ltr" data-tracking maxlength="60" value="${o.trackingNumber || ""}"><button class="ox-btn" type="button" data-save-tracking aria-label="ذخیره کد رهگیری">${icon("save", "ox-i--s")}</button></div>` })}
+            ${g ? html`<hr class="ox-sep" style="margin:4px 0"><div class="ox-label">عملیات درگاه ${o.paymentMethod}</div>
+              <div class="ox-col" style="gap:8px"><button class="ox-btn ox-btn--block" type="button" data-gw="update">${icon("minus", "ox-i--s")}مرجوعی بخشی از اقلام</button><button class="ox-btn ox-btn--danger ox-btn--block" type="button" data-gw="cancel">${icon("x", "ox-i--s")}لغو کامل و عودت وجه</button></div>
+              <p class="ox-help">از طریق API ${o.paymentMethod} انجام می‌شود و وضعیت درگاه پیش از هر اقدام دوباره استعلام می‌شود.</p>` : ""}
           </div></section>
 
-          <section class="oa-card"><div class="oa-card__head"><h3>مشتری و ارسال</h3>${o.user?._id && OA.can("manage_users") ? html`<a class="oa-link" href="#/customers/${o.user._id}">پروفایل</a>` : ""}</div><div class="oa-card__body"><dl class="oa-kv">
-            <dt>حساب کاربری</dt><dd>${o.user?.fullName || "—"} <span class="ltr oa-muted">${o.user?.mobile || ""}</span></dd>
-            <dt>تحویل‌گیرنده</dt><dd>${o.recipientName || "—"}</dd>
-            <dt>موبایل گیرنده</dt><dd class="ltr">${o.recipientMobile || "—"}</dd>
-            <dt>استان / شهر</dt><dd>${[o.province, o.city].filter(Boolean).join("، ") || "—"}</dd>
-            <dt>آدرس</dt><dd>${o.address}</dd>
-            <dt>کد پستی</dt><dd class="ltr">${o.postcode}</dd>
-          </dl></div></section>
+          <section class="ox-panel"><div class="ox-panel__head"><div class="ox-panel__title">${icon("user")}مشتری و تحویل</div></div><div class="ox-panel__body">
+            <div class="ox-entity" style="margin-bottom:14px"><span class="ox-avatar ox-avatar--light">${(o.user?.fullName || o.recipientName || "؟").charAt(0)}</span><div><span class="ox-cell-main">${o.user?.fullName || "—"}</span><span class="ox-cell-sub ltr">${o.user?.mobile || ""}</span></div></div>
+            <dl class="ox-kv"><dt>تحویل‌گیرنده</dt><dd>${o.recipientName || "—"}</dd><dt>موبایل</dt><dd class="ltr">${o.recipientMobile || "—"}</dd><dt>استان / شهر</dt><dd>${[o.province, o.city].filter(Boolean).join("، ") || "—"}</dd><dt>آدرس</dt><dd>${o.address}</dd><dt>کد پستی</dt><dd class="ltr">${o.postcode}</dd></dl>
+          </div></section>
 
-          <section class="oa-card"><div class="oa-card__head"><h3>منبع جذب</h3>${acq ? "" : html`<span class="oa-badge oa-badge--plain">${channelLabel("unknown")}</span>`}</div><div class="oa-card__body">
-            ${acq ? html`<div class="oa-stack" style="gap:14px"><div><div class="oa-label" style="margin-bottom:6px">آخرین منبع غیرمستقیم</div>${touch(acq.lastTouch)}</div><hr class="oa-divider" style="margin:0"><div><div class="oa-label" style="margin-bottom:6px">اولین منبع</div>${touch(acq.firstTouch)}</div></div>`
-              : html`<p class="oa-muted" style="margin:0;font-size:13px">برای این سفارش اطلاعات ردیابی ثبت نشده است (سفارش‌های پیش از فعال‌سازی ردیابی، یا مرورگری که کوکی را نپذیرفته).</p>`}
+          <section class="ox-panel"><div class="ox-panel__head"><div class="ox-panel__title">${icon("chart")}منبع جذب</div>${acq ? "" : OA.chip(channelLabel("unknown"), "", true)}</div><div class="ox-panel__body ox-col" style="gap:10px">
+            ${acq ? html`${touch("آخرین منبع غیرمستقیم", acq.lastTouch)}${touch("اولین منبع", acq.firstTouch)}<p class="ox-help">روش پرداخت (${o.paymentMethod}) ربطی به منبع جذب ندارد.</p>`
+              : html`<p class="muted small" style="line-height:1.9">برای این سفارش اطلاعات ردیابی ثبت نشده است (سفارش پیش از فعال‌شدن ردیابی یا مرورگری که کوکی را نپذیرفته).</p>`}
           </div></section>
         </div>
       </div>`);
 
-    $("[data-save-status]", d.body).addEventListener("click", async (e) => {
-      const status = $("[data-status]", d.body).value;
+    $("[data-save-status]", el).addEventListener("click", async (e) => {
+      const status = $("[data-status]", el).value;
       if (status === o.status) return toast("وضعیت تغییری نکرده است", "error");
-      const warn = status === "لغو شده" ? "لغو دستی سفارش وجه را بازنمی‌گرداند و موجودی را به انبار برنمی‌گرداند. برای سفارش‌های پرداخت‌شده اسنپ‌پی/ترب‌پی از دکمه لغو درگاه استفاده کنید." : "";
-      if (!(await confirm({ title: "تغییر وضعیت سفارش", message: `وضعیت از «${o.status}» به «${status}» تغییر کند؟ ${warn}`, confirmText: "ثبت وضعیت", danger: status === "لغو شده" }))) return;
-      try {
-        await busy(e.currentTarget, () => api(`/admin/orders/edit/${o._id}`, { method: "PUT", body: { status, note: $("[data-note]", d.body).value } }), "وضعیت سفارش ثبت شد");
-        reload(); listApi && listApi.reload();
-      } catch (_) {}
+      const cancel = status === "لغو شده";
+      if (!(await confirm({ title: "تغییر وضعیت سفارش", message: `وضعیت سفارش ${o.OrderNum} از «${o.status}» به «${status}» تغییر کند؟`, consequence: cancel ? "لغو دستی وجه را بازنمی‌گرداند و موجودی را به انبار برنمی‌گرداند. سفارش‌های پرداخت‌شده اسنپ‌پی/ترب‌پی را با دکمه لغو درگاه لغو کنید." : "", confirmText: "ثبت وضعیت", danger: cancel }))) return;
+      try { await busy(e.currentTarget, () => api(`/admin/orders/edit/${o._id}`, { method: "PUT", body: { status, note: $("[data-note]", el).value } }), "وضعیت سفارش ثبت شد"); reload(); } catch (_) {}
     });
-    $("[data-save-tracking]", d.body).addEventListener("click", async (e) => {
-      try {
-        await busy(e.currentTarget, () => api(`/orders/${o._id}/shipping`, { method: "PATCH", body: { trackingNumber: $("[data-tracking]", d.body).value } }), "کد رهگیری ذخیره شد");
-        reload();
-      } catch (_) {}
+    $("[data-save-tracking]", el).addEventListener("click", async (e) => {
+      try { await busy(e.currentTarget, () => api(`/orders/${o._id}/shipping`, { method: "PATCH", body: { trackingNumber: $("[data-tracking]", el).value } }), "کد رهگیری ذخیره شد"); reload(); } catch (_) {}
     });
-    $$("[data-gw]", d.body).forEach((b) => b.addEventListener("click", () => gatewayAction(b, b.dataset.gw, gateway, o, () => { reload(); listApi && listApi.reload(); })));
+    $$("[data-gw]", el).forEach((b) => b.addEventListener("click", () => gatewayAction(b, b.dataset.gw, gateway, o, reload)));
   }
-
-  const badge2 = (t, tone) => OA.badge(t, tone);
 
   async function gatewayAction(btn, action, gateway, o, done) {
     const base = `/admin/orders/${o._id}/${gateway}`;
-    if (action === "sync") {
-      try { await busy(btn, () => api(`${base}/sync`, { method: "POST", body: {} }), (r) => `${r.message} (${r.status || "—"})`); done(); } catch (_) {}
-      return;
-    }
+    if (action === "sync") { try { await busy(btn, () => api(`${base}/sync`, { method: "POST", body: {} }), (r) => `${r.message} (${r.status || "—"})`); done(); } catch (_) {} return; }
     if (action === "cancel") {
-      const ok = await confirm({ title: "لغو کامل سفارش در درگاه", message: `سفارش ${o.OrderNum} در ${o.paymentMethod} لغو و وجه به مشتری برگردانده می‌شود و موجودی به انبار برمی‌گردد. این عملیات برگشت‌ناپذیر است.`, confirmText: "لغو و عودت وجه", danger: true, requireText: o.OrderNum });
+      const ok = await confirm({ title: "لغو کامل و عودت وجه", message: `سفارش ${o.OrderNum} در ${o.paymentMethod} لغو می‌شود.`, consequence: "وجه از طریق درگاه به مشتری برگردانده و موجودی به انبار برگردانده می‌شود. این عملیات برگشت‌ناپذیر است.", confirmText: "لغو و عودت وجه", danger: true, requireText: o.OrderNum });
       if (!ok) return;
       try { await busy(btn, () => api(`${base}/cancel`, { method: "POST", body: { confirmed: true } }), (r) => r.message); done(); } catch (_) {}
       return;
     }
-    // partial return: choose new quantities (only decreases are allowed by the gateway)
     const key = (p) => String(gateway === "snappay" ? p.snappItemId || p.product?._id || p.product : p.product?._id || p.product);
     const m = OA.modal({
-      title: "مرجوعی بخشی از اقلام",
-      size: "oa-modal--lg",
-      body: html`<p class="oa-help" style="margin-top:0">تعداد جدید هر قلم را وارد کنید. فقط کاهش تعداد مجاز است؛ مبلغ جدید با درگاه به‌روزرسانی و اقلام کم‌شده به انبار برمی‌گردند.</p>
-        <table class="oa-table"><thead><tr><th>محصول</th><th>تعداد فعلی</th><th>تعداد جدید</th></tr></thead><tbody>
-        ${o.products.map((p) => html`<tr><td>${p.nameAtPurchase}<span class="oa-cell-sub">${[p.selectedColor, p.selectedSize].filter(Boolean).join(" / ")}</span></td><td class="num">${num(p.quantity)}</td><td><input class="oa-input oa-input--sm" style="width:90px" type="number" min="0" max="${p.quantity}" value="${p.quantity}" data-qty="${key(p)}"></td></tr>`)}
-        </tbody></table>`,
-      foot: html`<button class="oa-btn" data-close>انصراف</button><button class="oa-btn oa-btn--danger-solid" data-ok>ارسال به درگاه</button>`,
+      title: "مرجوعی بخشی از اقلام", sub: "فقط کاهش تعداد مجاز است؛ مبلغ جدید با درگاه به‌روز و اقلام کم‌شده به انبار برمی‌گردند.", iconName: "minus", size: "ox-dialog--l",
+      body: html`<div class="ox-table-wrap" style="border:1px solid var(--line);border-radius:8px"><table class="ox-table"><thead><tr><th>محصول</th><th class="col-num">تعداد فعلی</th><th>تعداد جدید</th></tr></thead><tbody>
+        ${o.products.map((p) => html`<tr><td><span class="ox-cell-main">${p.nameAtPurchase}</span><span class="ox-cell-sub">${[p.selectedColor, p.selectedSize].filter(Boolean).join(" / ")}</span></td><td class="col-num">${num(p.quantity)}</td><td><input class="ox-input ox-input--sm ox-input--num" style="width:90px" type="number" min="0" max="${p.quantity}" value="${p.quantity}" data-qty="${key(p)}"></td></tr>`)}</tbody></table></div>`,
+      foot: html`<button class="ox-btn" type="button" data-close>انصراف</button><button class="ox-btn ox-btn--danger-solid" type="button" data-ok>ارسال به درگاه</button>`,
     });
     $("[data-ok]", m.el).addEventListener("click", async (e) => {
       const items = $$("[data-qty]", m.el).map((i) => ({ itemId: i.dataset.qty, productId: i.dataset.qty, quantity: Number(OA.toEn(i.value)) }));
-      if (!(await confirm({ title: "تأیید نهایی", message: "این تغییر در درگاه پرداخت ثبت می‌شود و برگشت‌پذیر نیست. ادامه می‌دهید؟", confirmText: "بله، ارسال شود", danger: true }))) return;
+      if (!(await confirm({ title: "تأیید نهایی", message: "این تغییر در درگاه پرداخت ثبت می‌شود.", consequence: "برگشت‌پذیر نیست.", confirmText: "بله، ارسال شود", danger: true }))) return;
       try { await busy(e.currentTarget, () => api(`${base}/update`, { method: "POST", body: { items, confirmed: true } }), (r) => r.message); m.close(true); done(); } catch (_) {}
     });
   }
 
   OA.section("orders", {
-    title: "سفارش‌ها",
-    group: "فروش",
-    nav: true,
-    icon: "bag",
-    perm: "manage_orders",
-    render,
-    onArgs(args) {
-      if (!listApi) return false;
-      if (args[0]) openOrder(args[0]);
-      else if (openDrawer) openDrawer.close(true);
-      return true;
-    },
+    title: "سفارش‌ها", short: "سفارش‌ها", group: "تجارت", nav: true, icon: "bag", perm: "manage_orders",
+    quick: { label: "نیازمند اقدام", icon: "truck", href: "#/orders?status=needs_action" },
+    render(el, { args }) { if (args[0]) renderDetail(el, args[0]); else renderList(el); },
   });
-  OA.openOrder = openOrder;
-  void fail;
+  void raw;
 })();

@@ -9,8 +9,8 @@ paginated JSON endpoints. No build step, no new runtime dependencies.
 | Area | Files |
 | --- | --- |
 | Shell & login views | `views/AdminPanel.ejs`, `views/adminlogin.ejs`, `views/partials/admin/icons.ejs` |
-| Styles (scoped to `.oa`, never loaded on the storefront) | `public/admin-assets/admin.css` |
-| Front-end core (escaping templates, API client, router, modal/drawer/toast, list) | `public/admin-assets/js/core.js`, `charts.js`, `boot.js` |
+| Styles — the "ODOUR Control" design system, `ox-` classes scoped to `body.ox`, never loaded on the storefront | `public/admin-assets/admin.css` |
+| Front-end core (escaping templates, API client, hash router with unsaved-change guard, dialogs, toasts, menus, data lists) | `public/admin-assets/js/core.js`, `charts.js`, `boot.js` |
 | Sections | `dashboard.js`, `analytics.js`, `orders.js`, `products.js`, `inventory.js`, `customers.js`, `catalog.js` (categories, brands), `marketing.js` (discounts, banners), `content.js` (blog), `team.js` (admins, activity, account) |
 | New JSON API (`/admin/api/v2`) | `routes/adminApi.js` |
 | Pre-existing admin endpoints (kept, hardened) | `routes/admin.js` |
@@ -29,6 +29,36 @@ load, a plain HTML textarea is shown instead.
 
 Dashboard · Traffic sources · Orders · Customers · Products · Inventory · Categories ·
 Brands · Discount codes · Banners · Blog · Admins & permissions · Activity · My account.
+
+## Design system ("ODOUR Control")
+
+* **Palette** (CSS custom properties on `:root` in `admin.css`): navigation `#0B1220` /
+  `#172238`, app background `#F3F6FB`, surfaces `#FFFFFF` / `#F8FAFD`, text `#111827` /
+  `#64748B`, primary cobalt `#4355E8` (hover `#3444C9`), teal `#0D9488` (charts, stock),
+  borders `#E2E8F0`, success `#059669`, warning `#D97706`, danger `#DC3545`.
+* **Type**: Vazirmatn; page titles 29–31px, KPI values 30–38px, tabular numerals.
+* **Geometry**: 8px spacing grid, cards 10px radius, inputs/buttons 8px, dialogs 12px,
+  rectangular status chips.
+* **Shell**: a dark right-side rail (80px collapsed with tooltips / 260px expanded, state
+  kept in `localStorage["ox-rail"]`) grouped into Overview, Commerce, Catalog, Marketing,
+  Content and Administration, with the profile menu at the bottom; a solid 76px header with
+  breadcrumb + title, a global command palette (Ctrl/⌘ K: jump to sections or search
+  orders, products and customers), a context quick action, notifications and a storefront
+  shortcut. Below 1024px the rail becomes a drawer and a bottom tab bar (four primary
+  sections + «بیشتر» that opens every other section) appears.
+* **Workspaces**: product, order, customer, banner and blog editing are full pages
+  (`#/products/:id`, `#/orders/:id`, `#/customers/:id`, `#/banners/:id`, `#/weblogs/:id`,
+  `new` for creation) with a back button, a sticky action bar and an unsaved-changes guard
+  (in-app navigation and tab close). The product editor has a section navigator, the form
+  sheet and a live storefront-card preview; the blog editor has the writing column and a
+  settings sidebar (publishing, categories, reading time, SEO).
+* **Data views**: lists use underline status tabs, a filter toolbar (a filter dialog on
+  phones), row overflow menus and become record cards under 760px. Inventory is a
+  master–detail view (`#/inventory?select=<productId>` opens a product directly) with a
+  five-step CSV import. The activity log is an audit feed grouped by day.
+* Toasts appear top-left (bottom on phones) and are dismissable; destructive actions use a
+  confirmation dialog that states the consequence; loading states are layout-shaped
+  skeletons.
 
 Every list is filtered, sorted and paginated on the server, and filters are kept in the
 URL hash (`#/orders?status=…`) so refresh and shared links keep them.

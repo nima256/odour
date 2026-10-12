@@ -2,67 +2,81 @@
 <html lang="fa" dir="rtl">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="robots" content="noindex, nofollow">
   <meta name="csrf-token" content="<%= csrfToken %>">
-  <meta name="theme-color" content="#f7f5f0">
-  <title>پنل مدیریت اودر</title>
+  <meta name="theme-color" content="#0b1220">
+  <title>Odour Control</title>
   <link rel="preload" href="/admin/fonts/vazirmatn/Vazirmatn-Regular.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="/admin-assets/admin.css?v=<%= assetVersion %>">
+  <script>try { document.documentElement.dataset.rail = localStorage.getItem("ox-rail") || "collapsed"; } catch (_) {}</script>
 </head>
-<body class="oa">
+<body class="ox" data-rail="collapsed">
+  <script>document.body.dataset.rail = document.documentElement.dataset.rail || "collapsed";</script>
   <%- include('./partials/admin/icons') %>
-  <a class="sr-only" href="#oa-content">پرش به محتوا</a>
-  <div class="oa-shell">
-    <aside class="oa-sidebar" id="oa-sidebar" aria-label="منوی مدیریت">
-      <div class="oa-brand">
-        <div class="oa-brand__mark" aria-hidden="true">OD</div>
-        <div>
-          <div class="oa-brand__name">ODOUR</div>
-          <div class="oa-brand__sub">پنل مدیریت فروشگاه</div>
-        </div>
-      </div>
-      <nav class="oa-nav" id="oa-nav"></nav>
-      <div class="oa-sidebar__foot">
-        <div class="oa-avatar" aria-hidden="true"><%= (adminBoot.admin.fullName || 'A').trim().charAt(0) %></div>
-        <div class="oa-sidebar__who">
-          <b><%= adminBoot.admin.fullName %></b>
-          <span><%= adminBoot.admin.role === 'super_admin' ? 'مدیر ارشد' : 'مدیر' %></span>
-        </div>
-        <button class="oa-btn oa-btn--ghost oa-btn--icon oa-btn--sm" type="button" id="oa-logout" title="خروج" aria-label="خروج از حساب">
-          <svg class="oa-icon"><use href="#i-logout"/></svg>
-        </button>
-      </div>
-    </aside>
-    <div class="oa-scrim" id="oa-scrim"></div>
+  <a class="sr-only" href="#ox-main">پرش به محتوا</a>
 
-    <div class="oa-main">
-      <header class="oa-topbar" id="oa-topbar">
-        <button class="oa-btn oa-btn--ghost oa-btn--icon oa-menu-btn" type="button" id="oa-menu" aria-label="باز کردن منو" aria-controls="oa-sidebar" aria-expanded="false">
-          <svg class="oa-icon"><use href="#i-menu"/></svg>
-        </button>
-        <div>
-          <div class="oa-topbar__crumb" id="oa-crumb">اودر</div>
-          <div class="oa-topbar__title" id="oa-title">داشبورد</div>
-        </div>
-        <div class="oa-topbar__spacer"></div>
-        <a class="oa-btn oa-btn--ghost oa-btn--sm" href="/" target="_blank" rel="noopener">
-          <svg class="oa-icon oa-icon--sm"><use href="#i-external"/></svg><span class="oa-hide-sm">مشاهده فروشگاه</span>
-        </a>
-        <div class="oa-dropdown" id="oa-notify">
-          <button class="oa-btn oa-btn--ghost oa-btn--icon oa-bell" type="button" id="oa-bell" aria-haspopup="true" aria-expanded="false" aria-label="اعلان‌ها">
-            <svg class="oa-icon"><use href="#i-bell"/></svg>
-            <span class="oa-bell__dot" id="oa-bell-dot" hidden></span>
-          </button>
-          <div class="oa-popover" id="oa-notify-panel" role="dialog" aria-label="اعلان‌ها"></div>
-        </div>
-      </header>
-      <main class="oa-content" id="oa-content" tabindex="-1" aria-live="polite"></main>
+  <aside class="ox-rail" id="ox-rail" aria-label="ناوبری اصلی">
+    <div class="ox-rail__top">
+      <div class="ox-mark" aria-hidden="true">O</div>
+      <div class="ox-rail__brand"><b>ODOUR</b><span>CONTROL</span></div>
+      <button class="ox-btn ox-btn--ghost ox-btn--sm ox-btn--icon ox-rail__toggle" type="button" id="ox-rail-toggle" aria-label="باز و بسته کردن منو" aria-expanded="false" style="color:#c7d2e6">
+        <svg class="ox-i ox-i--s"><use href="#i-panel"/></svg>
+      </button>
     </div>
-  </div>
-  <div class="oa-toasts" id="oa-toasts" role="status" aria-live="polite"></div>
+    <nav class="ox-rail__nav" id="ox-nav"></nav>
+    <div class="ox-rail__foot">
+      <button class="ox-rail__me" type="button" id="ox-me" aria-haspopup="menu" aria-expanded="false" data-tip="<%= adminBoot.admin.fullName %>">
+        <span class="ox-avatar" aria-hidden="true"><%= (adminBoot.admin.fullName || 'A').trim().charAt(0) %></span>
+        <span class="ox-rail__who"><b><%= adminBoot.admin.fullName %></b><span><%= adminBoot.admin.role === 'super_admin' ? 'مدیر ارشد' : 'مدیر' %></span></span>
+      </button>
+      <div class="ox-pop" id="ox-me-menu" role="menu" style="bottom:calc(100% + 6px);inset-inline-start:14px">
+        <a class="ox-menu-item" role="menuitem" href="#/account"><svg class="ox-i ox-i--s"><use href="#i-user"/></svg>حساب من</a>
+        <a class="ox-menu-item" role="menuitem" href="/" target="_blank" rel="noopener"><svg class="ox-i ox-i--s"><use href="#i-external"/></svg>مشاهده فروشگاه</a>
+        <div class="ox-menu-sep"></div>
+        <button class="ox-menu-item ox-menu-item--danger" role="menuitem" type="button" data-logout><svg class="ox-i ox-i--s"><use href="#i-logout"/></svg>خروج از حساب</button>
+      </div>
+    </div>
+  </aside>
+  <div class="ox-scrim" id="ox-scrim"></div>
 
-  <script id="oa-boot" type="application/json"><%- JSON.stringify(adminBoot).replace(/</g, '\\u003c') %></script>
+  <div class="ox-app">
+    <header class="ox-header" id="ox-header">
+      <div class="ox-row ox-row--nowrap" style="gap:12px;min-width:0">
+        <button class="ox-btn ox-btn--ghost ox-btn--icon ox-header__menu" type="button" id="ox-menu" aria-label="باز کردن منو" aria-controls="ox-rail" aria-expanded="false">
+          <svg class="ox-i"><use href="#i-menu"/></svg>
+        </button>
+        <div class="ox-header__title">
+          <div class="ox-header__crumb" id="ox-crumb"></div>
+          <div class="ox-header__h" id="ox-title">داشبورد</div>
+        </div>
+      </div>
+      <div class="ox-header__search">
+        <button class="ox-search-trigger" type="button" id="ox-search" aria-label="جستجو در سفارش‌ها، محصولات، مشتریان و بخش‌ها">
+          <svg class="ox-i"><use href="#i-search"/></svg>
+          <span>جستجوی سفارش، محصول، مشتری یا بخش…</span>
+          <span class="ox-kbd">Ctrl K</span>
+        </button>
+      </div>
+      <div class="ox-header__tools">
+        <span class="ox-header__quick" id="ox-quick"></span>
+        <button class="ox-btn ox-btn--ghost ox-btn--icon ox-header__msearch" type="button" id="ox-search-m" aria-label="جستجو"><svg class="ox-i"><use href="#i-search"/></svg></button>
+        <a class="ox-btn ox-btn--ghost ox-btn--icon ox-header__store" href="/" target="_blank" rel="noopener" aria-label="مشاهده فروشگاه" title="مشاهده فروشگاه"><svg class="ox-i"><use href="#i-store"/></svg></a>
+        <div style="position:relative" id="ox-notify">
+          <button class="ox-btn ox-btn--ghost ox-btn--icon" type="button" id="ox-bell" aria-haspopup="true" aria-expanded="false" aria-label="اعلان‌ها" style="position:relative">
+            <svg class="ox-i"><use href="#i-bell"/></svg><span class="ox-dot" id="ox-bell-dot" hidden></span>
+          </button>
+          <div class="ox-pop ox-notify" id="ox-notify-panel" role="dialog" aria-label="اعلان‌ها"></div>
+        </div>
+      </div>
+    </header>
+    <main class="ox-main" id="ox-main" tabindex="-1"></main>
+  </div>
+
+  <nav class="ox-tabbar" id="ox-tabbar" aria-label="ناوبری سریع"></nav>
+  <div class="ox-toasts" id="ox-toasts" role="status" aria-live="polite"></div>
+
+  <script id="ox-boot" type="application/json"><%- JSON.stringify(adminBoot).replace(/</g, '\\u003c') %></script>
   <script src="/admin-assets/js/core.js?v=<%= assetVersion %>" defer></script>
   <script src="/admin-assets/js/charts.js?v=<%= assetVersion %>" defer></script>
   <script src="/admin-assets/js/dashboard.js?v=<%= assetVersion %>" defer></script>

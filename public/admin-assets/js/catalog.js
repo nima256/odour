@@ -1,166 +1,174 @@
-/* Categories (nested, product & blog) and brands. */
+/* Catalog structure — category tree with side editor, brand gallery. */
 (function () {
   "use strict";
-  const { html, raw, set, $, $$, num, icon, api, upload, toast, fail, busy, confirm, router } = OA;
-
+  const { html, set, $, $$, num, icon, api, upload, toast, busy, confirm, router, attr, field, toggle } = OA;
   const ICONS = { "": "بدون آیکن", "cat-perfume-women": "عطر زنانه", "cat-perfume-men": "عطر مردانه", "cat-skin": "مراقبت پوست", "cat-hair": "مراقبت مو", "cat-lipstick": "آرایشی", "cat-brush": "ابزار آرایش", "cat-body": "بدن", "cat-device": "لوازم برقی", "cat-default": "عمومی" };
 
-  // Single image field backed by /admin/upload-image
-  function imageField(host, initial, onChange) {
+  // Single uploaded image (/admin/upload-image → /uploads/…).
+  function imageField(host, initial, onChange, { wide = false } = {}) {
     let url = initial || "";
     const draw = () => {
-      set(host, html`<div class="oa-inline">${url ? html`<img class="oa-thumb" style="width:64px;height:64px" src="${url}" alt="">` : ""}<button type="button" class="oa-btn oa-btn--sm" data-up>${icon("upload", "oa-icon--sm")} ${url ? "تغییر" : "بارگذاری تصویر"}</button>${url ? html`<button type="button" class="oa-btn oa-btn--sm oa-btn--danger" data-rm>حذف</button>` : ""}</div>`);
-      $("[data-up]", host).addEventListener("click", () => {
-        const i = document.createElement("input"); i.type = "file"; i.accept = "image/jpeg,image/png,image/webp";
-        i.onchange = async () => { if (!i.files[0]) return; const b = $("[data-up]", host); try { const r = await busy(b, () => upload("/admin/upload-image", i.files, "image")); url = r.url; onChange(url); draw(); } catch (_) {} };
-        i.click();
-      });
-      const rm = $("[data-rm]", host);
-      if (rm) rm.addEventListener("click", () => { url = ""; onChange(""); draw(); });
+      set(host, html`<div class="ox-row" style="gap:12px">${url ? html`<img class="ox-thumb" style="width:${wide ? 120 : 72}px;height:72px;object-fit:contain;background:#fff" src="${url}" alt="">` : html`<span class="ox-thumb ox-thumb--empty" style="width:72px;height:72px">${icon("image")}</span>`}
+        <div class="ox-col" style="gap:6px"><button class="ox-btn ox-btn--sm" type="button" data-up>${icon("upload", "ox-i--s")}${url ? "تغییر تصویر" : "بارگذاری تصویر"}</button>${url ? html`<button class="ox-btn ox-btn--sm ox-btn--text" type="button" data-rm style="color:var(--danger)">حذف تصویر</button>` : ""}</div></div>`);
+      $("[data-up]", host).addEventListener("click", () => { const i = document.createElement("input"); i.type = "file"; i.accept = "image/jpeg,image/png,image/webp"; i.onchange = async () => { if (!i.files[0]) return; try { const r = await busy($("[data-up]", host), () => upload("/admin/upload-image", i.files, "image")); url = r.url; onChange(url); draw(); } catch (_) {} }; i.click(); });
+      const rm = $("[data-rm]", host); if (rm) rm.addEventListener("click", () => { url = ""; onChange(""); draw(); });
     };
     draw();
   }
   OA.imageField = imageField;
 
-  // ------------------------------------------------------------ categories
+  // -------------------------------------------------------------- categories
   function renderCategories(el) {
     const q = router.query();
     let type = q.type === "weblog" ? "weblog" : "product";
-    set(el, html`${OA.pageHead("دسته‌بندی‌ها", "ساختار درختی دسته‌های محصول و مجله", OA.can("manage_categories") ? html`<button class="oa-btn oa-btn--primary" data-new>${icon("plus", "oa-icon--sm")} دسته جدید</button>` : "")}
-      <div class="oa-card"><div class="oa-toolbar"><div class="oa-tabs" role="tablist"><button class="oa-tab" role="tab" data-type="product" aria-selected="${String(type === "product")}">دسته‌های محصول</button><button class="oa-tab" role="tab" data-type="weblog" aria-selected="${String(type === "weblog")}">دسته‌های مجله</button></div>
-      <label class="oa-search">${icon("search")}<input class="oa-input" type="search" data-q placeholder="جستجوی دسته…"></label></div><div data-body>${OA.skeletonRows(6)}</div></div>`);
-    const body = $("[data-body]", el);
     let all = [];
-    const load = async () => {
-      try { all = (await api("/categories", { query: { type } })).categories; draw(); } catch (e) { set(body, OA.errorBox(e, load)); }
-    };
-    const draw = () => {
+    let active = null;
+    const canEdit = OA.can("manage_categories");
+    set(el, html`${OA.pageHead({ title: "دسته‌بندی‌ها", subtitle: "ساختار درختی دسته‌های محصول و مجله", actions: canEdit ? html`<button class="ox-btn ox-btn--primary" type="button" data-new>${icon("plus", "ox-i--s")}دسته جدید</button>` : "" })}
+      <div class="ox-tabs" role="tablist" style="margin-bottom:16px"><button class="ox-tab" type="button" role="tab" data-type="product" aria-selected="${String(type === "product")}">دسته‌های محصول</button><button class="ox-tab" type="button" role="tab" data-type="weblog" aria-selected="${String(type === "weblog")}">دسته‌های مجله</button></div>
+      <div class="ox-split"><div class="ox-datacard"><div class="ox-toolbar"><label class="ox-searchbox">${icon("search")}<input class="ox-input" type="search" data-q placeholder="جستجوی دسته…" aria-label="جستجوی دسته"></label><span class="ox-toolbar__count" data-total></span></div><div data-tree>${OA.skeletonTable(5)}</div></div>
+        <aside data-editor style="position:sticky;top:calc(var(--header-h) + 20px)"></aside></div>`);
+    const tree = $("[data-tree]", el), editor = $("[data-editor]", el);
+    const idle = () => set(editor, html`<div class="ox-panel">${OA.empty({ icon: "tag", title: "دسته‌ای را برای ویرایش انتخاب کنید", text: canEdit ? "یا یک دسته جدید بسازید." : "", action: canEdit ? html`<button class="ox-btn ox-btn--primary" type="button" data-new2>${icon("plus", "ox-i--s")}دسته جدید</button>` : "" })}</div>`) && $("[data-new2]", editor) && $("[data-new2]", editor).addEventListener("click", () => edit(null));
+    const load = async () => { try { all = (await api("/categories", { query: { type } })).categories; draw(); } catch (e) { set(tree, OA.errorBox(e, load)); } };
+    function draw() {
       const term = $("[data-q]", el).value.trim();
-      const byParent = new Map();
-      all.forEach((c) => { const k = c.parentId ? String(c.parentId) : ""; if (!byParent.has(k)) byParent.set(k, []); byParent.get(k).push(c); });
+      const kids = new Map();
+      all.forEach((c) => { const k = c.parentId ? String(c.parentId) : ""; if (!kids.has(k)) kids.set(k, []); kids.get(k).push(c); });
       const ids = new Set(all.map((c) => String(c._id)));
-      const roots = all.filter((c) => !c.parentId || !ids.has(String(c.parentId)));
       const rows = [];
-      const walk = (c, depth) => { rows.push({ c, depth }); (byParent.get(String(c._id)) || []).forEach((ch) => walk(ch, depth + 1)); };
-      roots.forEach((c) => walk(c, 0));
+      const walk = (c, d) => { rows.push({ c, d }); (kids.get(String(c._id)) || []).forEach((x) => walk(x, d + 1)); };
+      all.filter((c) => !c.parentId || !ids.has(String(c.parentId))).forEach((c) => walk(c, 0));
       const shown = term ? rows.filter((r) => r.c.name.includes(term)) : rows;
-      if (!shown.length) return set(body, OA.empty("دسته‌ای وجود ندارد", "", "tag"));
-      set(body, html`<div class="oa-table-wrap"><table class="oa-table oa-table--cards"><thead><tr><th>نام</th><th>نامک</th><th>${type === "product" ? "محصولات" : "مقالات"}</th><th>ترتیب</th><th>وضعیت</th><th class="col-actions"></th></tr></thead><tbody>
-        ${shown.map(({ c, depth }) => html`<tr class="is-clickable" data-id="${c._id}">
-          <td class="col-main"><div class="oa-media" style="padding-inline-start:${depth * 22}px">${depth ? html`<span class="oa-muted">└</span>` : ""}${c.img ? html`<img class="oa-thumb oa-thumb--sm" src="${c.img}" alt="">` : ""}<div><span class="oa-cell-title">${c.name}</span>${c.metaTitle ? html`<span class="oa-cell-sub">${c.metaTitle}</span>` : ""}</div></div></td>
-          <td data-label="نامک"><span class="oa-cell-sub" style="color:inherit">${c.slug}</span></td>
-          <td data-label="${type === "product" ? "محصولات" : "مقالات"}" class="num">${type === "product" ? html`${num(c.productCount)} <span class="oa-muted" style="font-size:12px">(${num(c.publishedCount)} منتشر)</span>` : num(c.weblogCount)}</td>
-          <td data-label="ترتیب" class="num">${num(c.displayOrder || 0)}</td>
-          <td data-label="وضعیت">${c.isActive === false ? OA.badge("غیرفعال", "") : OA.badge("فعال", "good")}</td>
-          <td class="col-actions">${OA.can("manage_categories") ? html`<button class="oa-btn oa-btn--ghost oa-btn--icon oa-btn--sm oa-btn--danger" data-del="${c._id}" aria-label="حذف">${icon("trash", "oa-icon--sm")}</button>` : ""}</td></tr>`)}
-      </tbody></table></div>`);
-      $$("tr[data-id]", body).forEach((tr) => tr.addEventListener("click", (e) => { if (e.target.closest("button")) return; if (OA.can("manage_categories")) edit(all.find((c) => String(c._id) === tr.dataset.id)); }));
-      $$("[data-del]", body).forEach((b) => b.addEventListener("click", async () => {
-        const c = all.find((x) => String(x._id) === b.dataset.del);
-        if (!(await confirm({ title: "حذف دسته‌بندی", message: `«${c.name}» حذف شود؟ دسته‌های دارای زیردسته، محصول یا مقاله قابل حذف نیستند.`, confirmText: "حذف", danger: true }))) return;
-        try { await busy(b, () => api(`/admin/categories/delete/${c._id}`, { method: "DELETE" }), "دسته‌بندی حذف شد"); OA.getLookups(true).catch(() => {}); load(); } catch (_) {}
-      }));
-    };
+      $("[data-total]", el).textContent = `${num(all.length)} دسته`;
+      if (!shown.length) return set(tree, OA.empty({ icon: "tag", title: "دسته‌ای وجود ندارد", compact: true }));
+      set(tree, html`<ul class="ox-tree" role="tree">${shown.map(({ c, d }) => html`<li role="treeitem" aria-level="${d + 1}"><div class="ox-tree__node ${active && String(active._id) === String(c._id) ? "is-active" : ""}" data-id="${c._id}" tabindex="0">
+        ${Array.from({ length: d }, () => html`<span class="ox-tree__guide"></span>`)}
+        ${c.img ? html`<img class="ox-thumb ox-thumb--xs" src="${c.img}" alt="">` : html`<span class="ox-thumb ox-thumb--xs ox-thumb--empty">${icon(d ? "chevron" : "tag", "ox-i--s")}</span>`}
+        <span class="ox-tree__name">${c.name}</span>
+        ${c.isActive === false ? OA.chip("غیرفعال", "", true) : ""}
+        <span class="ox-tree__meta">${type === "product" ? `${num(c.productCount)} محصول` : `${num(c.weblogCount)} مقاله`}</span>
+      </div></li>`)}</ul>`);
+      $$("[data-id]", tree).forEach((n) => { const go = () => canEdit && edit(all.find((c) => String(c._id) === n.dataset.id)); n.addEventListener("click", go); n.addEventListener("keydown", (e) => { if (e.key === "Enter") go(); }); });
+    }
     function edit(c) {
       const isNew = !c;
-      c = c || { name: "", categoryType: type, parentId: "", img: "", description: "", metaTitle: "", metaDescription: "", metaKeywords: "", isActive: true, displayOrder: 0, icon: "" };
-      const descendants = new Set();
-      if (!isNew) { const stack = [String(c._id)]; while (stack.length) { const id = stack.pop(); descendants.add(id); all.filter((x) => String(x.parentId) === id).forEach((x) => stack.push(String(x._id))); } }
+      active = c;
+      draw();
+      c = c || { name: "", parentId: "", img: "", description: "", metaTitle: "", metaDescription: "", metaKeywords: "", isActive: true, displayOrder: 0, icon: "" };
+      const desc = new Set();
+      if (!isNew) { const st = [String(c._id)]; while (st.length) { const id = st.pop(); desc.add(id); all.filter((x) => String(x.parentId) === id).forEach((x) => st.push(String(x._id))); } }
       let img = c.img || "";
-      const m = OA.modal({
-        title: isNew ? "دسته‌بندی جدید" : `ویرایش «${c.name}»`,
-        size: "oa-modal--lg",
-        body: html`<form class="oa-form-grid" data-f novalidate>
-          <label class="oa-field"><span>نام *</span><input class="oa-input" name="name" maxlength="50" value="${c.name}" required></label>
-          <label class="oa-field"><span>دسته والد</span><select class="oa-select" name="parentId"><option value="">— دسته اصلی —</option>${all.filter((x) => !descendants.has(String(x._id))).map((x) => html`<option value="${x._id}" ${raw(String(x._id) === String(c.parentId || "") ? "selected" : "")}>${x.name}</option>`)}</select></label>
-          <label class="oa-field"><span>ترتیب نمایش</span><input class="oa-input num" name="displayOrder" inputmode="numeric" value="${c.displayOrder || 0}"><small>عدد کمتر = نمایش زودتر</small></label>
-          ${type === "product" ? html`<label class="oa-field"><span>آیکن منو</span><select class="oa-select" name="icon">${Object.entries(ICONS).map(([k, l]) => html`<option value="${k}" ${raw((c.icon || "") === k ? "selected" : "")}>${l}</option>`)}</select></label>` : html`<span></span>`}
-          <div class="oa-field span-all"><span>تصویر دسته</span><div data-img></div></div>
-          <label class="oa-field span-all"><span>توضیحات (نمایش در صفحه دسته)</span><textarea class="oa-textarea" name="description" maxlength="1000" rows="3">${c.description || ""}</textarea></label>
-          <label class="oa-field"><span>عنوان متا (سئو)</span><input class="oa-input" name="metaTitle" maxlength="60" value="${c.metaTitle || ""}"><small>حداکثر ۶۰ کاراکتر</small></label>
-          <label class="oa-field"><span>کلمات کلیدی</span><input class="oa-input" name="metaKeywords" maxlength="300" value="${c.metaKeywords || ""}"></label>
-          <label class="oa-field span-all"><span>توضیحات متا</span><textarea class="oa-textarea" name="metaDescription" maxlength="160" rows="2">${c.metaDescription || ""}</textarea><small>حداکثر ۱۶۰ کاراکتر</small></label>
-          <label class="oa-switch span-all"><input type="checkbox" name="isActive" ${raw(c.isActive !== false ? "checked" : "")}><span class="oa-switch__track"></span><span>فعال (نمایش در فروشگاه)</span></label>
-          ${!isNew ? html`<p class="oa-help span-all" style="margin:0">نامک «${c.slug}» ثابت است تا لینک‌های قبلی خراب نشوند.</p>` : ""}
-        </form>`,
-        foot: html`<button class="oa-btn" data-close>انصراف</button><button class="oa-btn oa-btn--primary" data-ok>${isNew ? "ایجاد" : "ذخیره"}</button>`,
-      });
-      imageField($("[data-img]", m.el), img, (u) => (img = u));
-      $("[data-ok]", m.el).addEventListener("click", async (e) => {
-        const f = $("[data-f]", m.el).elements;
-        const name = f.name.value.trim();
-        if (name.length < 2) { f.name.setAttribute("aria-invalid", "true"); return toast("نام دسته حداقل ۲ کاراکتر است", "error"); }
+      set(editor, html`<form class="ox-panel" data-f novalidate>
+        <div class="ox-panel__head ox-panel__head--line"><div><div class="ox-panel__title">${isNew ? "دسته جدید" : c.name}</div><div class="ox-panel__sub">${isNew ? (type === "product" ? "دسته محصول" : "دسته مجله") : html`نامک ثابت: <span>${c.slug}</span>`}</div></div><button class="ox-btn ox-btn--ghost ox-btn--sm ox-btn--icon" type="button" data-x aria-label="بستن ویرایشگر">${icon("x")}</button></div>
+        <div class="ox-panel__body ox-form ox-form--1" style="max-height:calc(100vh - 300px);overflow:auto">
+          ${field({ label: "نام دسته", req: true, control: html`<input class="ox-input" name="name" maxlength="50" value="${c.name}">`, err: "نام دسته حداقل ۲ کاراکتر است" })}
+          <div class="ox-form">
+            ${field({ label: "دسته والد", control: html`<select class="ox-select" name="parentId"><option value="">— دسته اصلی —</option>${all.filter((x) => !desc.has(String(x._id))).map((x) => html`<option value="${x._id}" ${attr(String(x._id) === String(c.parentId || ""), "selected")}>${x.name}</option>`)}</select>` })}
+            ${field({ label: "ترتیب نمایش", help: "عدد کمتر = زودتر", control: html`<input class="ox-input ox-input--num" name="displayOrder" inputmode="numeric" value="${c.displayOrder || 0}">` })}
+          </div>
+          ${type === "product" ? field({ label: "آیکن منوی فروشگاه", control: html`<select class="ox-select" name="icon">${Object.entries(ICONS).map(([k, l]) => html`<option value="${k}" ${attr((c.icon || "") === k, "selected")}>${l}</option>`)}</select>` }) : ""}
+          <div class="ox-field"><span class="ox-label">تصویر دسته</span><div data-img></div></div>
+          ${field({ label: "توضیحات صفحه دسته", control: html`<textarea class="ox-textarea" name="description" maxlength="1000" rows="3">${c.description || ""}</textarea>` })}
+          <div class="ox-label" style="margin-top:6px">سئو</div>
+          ${field({ label: "عنوان متا", count: "۶۰", control: html`<input class="ox-input" name="metaTitle" maxlength="60" value="${c.metaTitle || ""}">` })}
+          ${field({ label: "توضیحات متا", count: "۱۶۰", control: html`<textarea class="ox-textarea" name="metaDescription" maxlength="160" rows="2">${c.metaDescription || ""}</textarea>` })}
+          ${field({ label: "کلمات کلیدی", control: html`<input class="ox-input" name="metaKeywords" maxlength="300" value="${c.metaKeywords || ""}">` })}
+          <div class="ox-setting" style="border:0">${toggle({ name: "isActive", checked: c.isActive !== false, title: "فعال", text: "نمایش در فروشگاه و منوها" })}</div>
+        </div>
+        <div class="ox-panel__foot ox-row">${!isNew ? html`<button class="ox-btn ox-btn--danger ox-btn--sm" type="button" data-del>${icon("trash", "ox-i--s")}حذف</button>` : ""}<span class="ox-spacer"></span><button class="ox-btn ox-btn--primary" type="submit" data-ok>${isNew ? "ایجاد دسته" : "ذخیره تغییرات"}</button></div>
+      </form>`);
+      imageField($("[data-img]", editor), img, (u) => (img = u));
+      $("[data-x]", editor).addEventListener("click", () => { active = null; draw(); idle(); });
+      const formEl = $("[data-f]", editor);
+      formEl.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const f = formEl.elements, name = f.name.value.trim();
+        if (name.length < 2) { f.name.closest(".ox-field").classList.add("is-invalid"); return; }
         const body = { name, categoryType: type, parentId: f.parentId.value || null, img, description: f.description.value, metaTitle: f.metaTitle.value, metaDescription: f.metaDescription.value, metaKeywords: f.metaKeywords.value, isActive: f.isActive.checked, displayOrder: OA.intOrNull(f.displayOrder.value) || 0 };
         if (f.icon) body.icon = f.icon.value;
         try {
-          await busy(e.currentTarget, () => api(isNew ? "/admin/categories/add" : `/admin/categories/edit/${c._id}`, { method: isNew ? "POST" : "PUT", body }), isNew ? "دسته‌بندی ایجاد شد" : "دسته‌بندی ذخیره شد");
-          m.close(true); OA.getLookups(true).catch(() => {}); load();
+          const r = await busy($("[data-ok]", editor), () => api(isNew ? "/admin/categories/add" : `/admin/categories/edit/${c._id}`, { method: isNew ? "POST" : "PUT", body }), isNew ? "دسته‌بندی ایجاد شد" : "دسته‌بندی ذخیره شد");
+          OA.getLookups && OA.getLookups(true).catch(() => {});
+          await load();
+          const saved = all.find((x) => String(x._id) === String((r.category && (r.category._id || r.category.id)) || c._id));
+          if (saved) edit(saved); else idle();
         } catch (_) {}
       });
+      const del = $("[data-del]", editor);
+      if (del) del.addEventListener("click", async () => {
+        if (!(await confirm({ title: "حذف دسته‌بندی", message: `«${c.name}» حذف شود؟`, consequence: "دسته‌هایی که زیردسته، محصول یا مقاله دارند حذف نمی‌شوند؛ ابتدا آن‌ها را منتقل کنید یا دسته را غیرفعال کنید.", confirmText: "حذف دسته", danger: true }))) return;
+        try { await busy(del, () => api(`/admin/categories/delete/${c._id}`, { method: "DELETE" }), "دسته‌بندی حذف شد"); active = null; await load(); idle(); } catch (_) {}
+      });
+      if (innerWidth <= 1024) editor.scrollIntoView({ block: "start", behavior: "smooth" });
     }
-    $$("[data-type]", el).forEach((b) => b.addEventListener("click", () => { type = b.dataset.type; $$("[data-type]", el).forEach((x) => x.setAttribute("aria-selected", String(x === b))); router.replaceQuery(type === "weblog" ? { type } : {}); set(body, OA.skeletonRows(6)); load(); }));
+    $$("[data-type]", el).forEach((b) => b.addEventListener("click", () => { type = b.dataset.type; active = null; $$("[data-type]", el).forEach((x) => x.setAttribute("aria-selected", String(x === b))); router.replaceQuery(type === "weblog" ? { type } : {}); set(tree, OA.skeletonTable(5)); idle(); load(); }));
     $("[data-q]", el).addEventListener("input", OA.debounce(draw, 200));
-    const nb = $("[data-new]", el);
-    if (nb) nb.addEventListener("click", () => edit(null));
+    const nb = $("[data-new]", el); if (nb) nb.addEventListener("click", () => edit(null));
+    idle();
     load();
   }
 
-  // ---------------------------------------------------------------- brands
+  // ------------------------------------------------------------------ brands
   function renderBrands(el) {
-    set(el, html`${OA.pageHead("برندها", "برندهای فروشگاه و محصولات مرتبط", OA.can("manage_brands") ? html`<button class="oa-btn oa-btn--primary" data-new>${icon("plus", "oa-icon--sm")} برند جدید</button>` : "")}
-      <div class="oa-card"><div class="oa-toolbar"><label class="oa-search">${icon("search")}<input class="oa-input" type="search" data-q placeholder="جستجوی برند…"></label><span style="flex:1"></span><span class="oa-muted" data-total style="font-size:12.5px"></span></div><div data-body>${OA.skeletonRows(6)}</div></div>`);
-    const body = $("[data-body]", el);
+    let view = (() => { try { return localStorage.getItem("ox-brand-view") || "grid"; } catch (_) { return "grid"; } })();
     let all = [];
+    const canEdit = OA.can("manage_brands");
+    set(el, html`${OA.pageHead({ title: "برندها", count: "", subtitle: "برندهای فروشگاه و محصولات مرتبط", actions: canEdit ? html`<button class="ox-btn ox-btn--primary" type="button" data-new>${icon("plus", "ox-i--s")}برند جدید</button>` : "" })}
+      <div class="ox-row" style="margin-bottom:16px;justify-content:space-between"><label class="ox-searchbox">${icon("search")}<input class="ox-input" type="search" data-q placeholder="جستجوی برند…" aria-label="جستجوی برند"></label>
+        <div class="ox-btn-group" role="group" aria-label="نمایش"><button type="button" data-view="grid" aria-pressed="${String(view === "grid")}">${icon("grid", "ox-i--s")}کارت</button><button type="button" data-view="list" aria-pressed="${String(view === "list")}">${icon("list", "ox-i--s")}فهرست</button></div></div>
+      <div data-body>${OA.skeletonTable(4)}</div>`);
+    const body = $("[data-body]", el);
     const load = async () => { try { all = (await api("/brands")).brands; draw(); } catch (e) { set(body, OA.errorBox(e, load)); } };
-    const draw = () => {
-      const term = $("[data-q]", el).value.trim().toLowerCase();
-      const shown = all.filter((b) => !term || b.name.toLowerCase().includes(term));
-      $("[data-total]", el).textContent = `${num(all.length)} برند`;
-      if (!shown.length) return set(body, OA.empty("برندی پیدا نشد", "", "award"));
-      set(body, html`<div class="oa-table-wrap"><table class="oa-table oa-table--cards"><thead><tr><th>برند</th><th>محصولات</th><th>وضعیت</th><th class="col-actions"></th></tr></thead><tbody>
-        ${shown.map((b) => html`<tr class="is-clickable" data-id="${b._id}"><td class="col-main"><div class="oa-media">${b.logo ? html`<img class="oa-thumb" src="${b.logo}" alt="" style="object-fit:contain;background:#fff">` : html`<div class="oa-thumb" style="display:grid;place-items:center;font-weight:700;color:var(--oa-gold)">${b.name.charAt(0)}</div>`}<div><span class="oa-cell-title">${b.name}</span><span class="oa-cell-sub">${(b.description || "").slice(0, 80)}</span></div></div></td>
-          <td data-label="محصولات"><a class="oa-link num" href="#/products?brand=${b._id}">${num(b.productCount)}</a> <span class="oa-muted" style="font-size:12px">(${num(b.publishedCount)} منتشر)</span></td>
-          <td data-label="وضعیت">${b.isActive === false ? OA.badge("غیرفعال", "") : OA.badge("فعال", "good")}</td>
-          <td class="col-actions">${OA.can("manage_brands") ? html`<button class="oa-btn oa-btn--ghost oa-btn--icon oa-btn--sm oa-btn--danger" data-del="${b._id}" aria-label="حذف">${icon("trash", "oa-icon--sm")}</button>` : ""}</td></tr>`)}</tbody></table></div>`);
-      $$("tr[data-id]", body).forEach((tr) => tr.addEventListener("click", (e) => { if (e.target.closest("button, a")) return; if (OA.can("manage_brands")) edit(all.find((b) => String(b._id) === tr.dataset.id)); }));
-      $$("[data-del]", body).forEach((btn) => btn.addEventListener("click", async () => {
-        const b = all.find((x) => String(x._id) === btn.dataset.del);
-        if (!(await confirm({ title: "حذف برند", message: `«${b.name}» حذف شود؟${b.productCount ? ` ${num(b.productCount)} محصول به این برند متصل است و حذف ممکن نیست.` : ""}`, confirmText: "حذف", danger: true }))) return;
-        try { await busy(btn, () => api(`/admin/brands/delete/${b._id}`, { method: "DELETE" }), "برند حذف شد"); OA.getLookups(true).catch(() => {}); load(); } catch (_) {}
-      }));
-    };
+    const logo = (b, size = 48) => (b.logo ? html`<img src="${b.logo}" alt="" style="max-height:${size}px">` : html`<span>${b.name.charAt(0)}</span>`);
+    function draw() {
+      const t = $("[data-q]", el).value.trim().toLowerCase();
+      const shown = all.filter((b) => !t || b.name.toLowerCase().includes(t));
+      const c = $("[data-head-count]", el); if (c) c.textContent = `${num(all.length)} برند`;
+      if (!shown.length) return set(body, html`<div class="ox-datacard">${OA.empty({ icon: "award", title: "برندی پیدا نشد", action: canEdit ? html`<button class="ox-btn ox-btn--primary" type="button" data-new2>${icon("plus", "ox-i--s")}برند جدید</button>` : "" })}</div>`) && $("[data-new2]", body) && $("[data-new2]", body).addEventListener("click", () => edit(null));
+      if (view === "grid") {
+        set(body, html`<div class="ox-cards">${shown.map((b) => html`<button class="ox-brand" type="button" data-id="${b._id}"><div class="ox-brand__logo">${logo(b)}</div>
+          <div class="ox-row ox-row--between ox-row--nowrap"><b class="ellipsis" style="font-size:15px">${b.name}</b>${b.isActive === false ? OA.chip("غیرفعال") : OA.chip("فعال", "success")}</div>
+          <span class="muted small" style="min-height:38px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${b.description || "بدون توضیحات"}</span>
+          <div class="ox-row ox-row--between small"><span class="muted">محصولات</span><span><b class="num">${num(b.productCount)}</b> <span class="faint">(${num(b.publishedCount)} منتشر)</span></span></div></button>`)}</div>`);
+      } else {
+        set(body, html`<div class="ox-datacard"><div class="ox-table-wrap"><table class="ox-table"><thead><tr><th>برند</th><th>توضیحات</th><th class="col-num">محصولات</th><th>وضعیت</th></tr></thead><tbody>${shown.map((b) => html`<tr class="is-link" tabindex="0" data-id="${b._id}"><td><div class="ox-entity"><span class="ox-brand__logo" style="width:52px;height:40px;font-size:15px">${logo(b, 28)}</span><span class="ox-cell-main">${b.name}</span></div></td><td><span class="muted small ellipsis" style="display:block;max-width:420px">${b.description || "—"}</span></td><td class="col-num"><b>${num(b.productCount)}</b> <span class="faint small">(${num(b.publishedCount)})</span></td><td>${b.isActive === false ? OA.chip("غیرفعال") : OA.chip("فعال", "success")}</td></tr>`)}</tbody></table></div></div>`);
+      }
+      $$("[data-id]", body).forEach((n) => { const go = () => edit(all.find((b) => String(b._id) === n.dataset.id)); n.addEventListener("click", go); n.addEventListener("keydown", (e) => { if (e.key === "Enter" && n.tagName === "TR") go(); }); });
+    }
     function edit(b) {
       const isNew = !b;
+      if (!isNew && !canEdit) return router.go("products", [], { brand: b._id });
       b = b || { name: "", description: "", logo: "", isActive: true };
-      let logo = b.logo || "";
+      let logoUrl = b.logo || "";
       const m = OA.modal({
-        title: isNew ? "برند جدید" : `ویرایش «${b.name}»`,
-        body: html`<form class="oa-stack" style="gap:14px" data-f novalidate>
-          <label class="oa-field"><span>نام برند *</span><input class="oa-input" name="name" maxlength="50" value="${b.name}" required></label>
-          <div class="oa-field"><span>لوگو</span><div data-logo></div><small>JPG، PNG یا WEBP</small></div>
-          <label class="oa-field"><span>توضیحات</span><textarea class="oa-textarea" name="description" maxlength="500" rows="3">${b.description || ""}</textarea></label>
-          <label class="oa-switch"><input type="checkbox" name="isActive" ${raw(b.isActive !== false ? "checked" : "")}><span class="oa-switch__track"></span><span>برند فعال است</span></label>
-        </form>`,
-        foot: html`<button class="oa-btn" data-close>انصراف</button><button class="oa-btn oa-btn--primary" data-ok>${isNew ? "ایجاد" : "ذخیره"}</button>`,
+        title: isNew ? "برند جدید" : b.name, sub: isNew ? "" : `${num(b.productCount)} محصول متصل`, iconName: "award",
+        body: html`<form class="ox-form ox-form--1" data-f novalidate>
+          ${field({ label: "نام برند", req: true, control: html`<input class="ox-input" name="name" maxlength="50" value="${b.name}">`, err: "نام برند حداقل ۲ کاراکتر است" })}
+          <div class="ox-field"><span class="ox-label">لوگو</span><div data-logo></div><span class="ox-help">JPG، PNG یا WEBP</span></div>
+          ${field({ label: "توضیحات", count: "۵۰۰", control: html`<textarea class="ox-textarea" name="description" maxlength="500" rows="3">${b.description || ""}</textarea>` })}
+          <div class="ox-setting" style="border:0;padding:4px 0">${toggle({ name: "isActive", checked: b.isActive !== false, title: "برند فعال است" })}</div></form>`,
+        foot: html`${!isNew ? html`<a class="ox-btn ox-btn--ghost" href="#/products?brand=${b._id}" style="margin-inline-end:auto">${icon("box", "ox-i--s")}محصولات برند</a>${b.productCount ? "" : html`<button class="ox-btn ox-btn--danger" type="button" data-del>حذف</button>`}` : ""}<button class="ox-btn" type="button" data-close>انصراف</button><button class="ox-btn ox-btn--primary" type="button" data-ok>${isNew ? "ایجاد برند" : "ذخیره"}</button>`,
       });
-      imageField($("[data-logo]", m.el), logo, (u) => (logo = u));
+      imageField($("[data-logo]", m.el), logoUrl, (u) => (logoUrl = u), { wide: true });
       $("[data-ok]", m.el).addEventListener("click", async (e) => {
-        const f = $("[data-f]", m.el).elements;
-        const name = f.name.value.trim();
-        if (name.length < 2) return toast("نام برند حداقل ۲ کاراکتر است", "error");
-        try {
-          await busy(e.currentTarget, () => api(isNew ? "/admin/brands/add" : `/admin/brands/edit/${b._id}`, { method: isNew ? "POST" : "PUT", body: { name, description: f.description.value, isActive: f.isActive.checked, logo } }), isNew ? "برند ایجاد شد" : "برند ذخیره شد");
-          m.close(true); OA.getLookups(true).catch(() => {}); load();
-        } catch (_) {}
+        const f = $("[data-f]", m.el).elements, name = f.name.value.trim();
+        if (name.length < 2) { f.name.closest(".ox-field").classList.add("is-invalid"); return; }
+        try { await busy(e.currentTarget, () => api(isNew ? "/admin/brands/add" : `/admin/brands/edit/${b._id}`, { method: isNew ? "POST" : "PUT", body: { name, description: f.description.value, isActive: f.isActive.checked, logo: logoUrl } }), isNew ? "برند ایجاد شد" : "برند ذخیره شد"); m.close(true); OA.getLookups && OA.getLookups(true).catch(() => {}); load(); } catch (_) {}
+      });
+      const del = $("[data-del]", m.el);
+      if (del) del.addEventListener("click", async () => {
+        if (!(await confirm({ title: "حذف برند", message: `«${b.name}» حذف شود؟`, consequence: "برندهایی که محصول دارند حذف نمی‌شوند.", confirmText: "حذف برند", danger: true }))) return;
+        try { await busy(del, () => api(`/admin/brands/delete/${b._id}`, { method: "DELETE" }), "برند حذف شد"); m.close(true); load(); } catch (_) {}
       });
     }
+    $$("[data-view]", el).forEach((b) => b.addEventListener("click", () => { view = b.dataset.view; try { localStorage.setItem("ox-brand-view", view); } catch (_) {} $$("[data-view]", el).forEach((x) => x.setAttribute("aria-pressed", String(x === b))); draw(); }));
     $("[data-q]", el).addEventListener("input", OA.debounce(draw, 200));
-    const nb = $("[data-new]", el);
-    if (nb) nb.addEventListener("click", () => edit(null));
+    const nb = $("[data-new]", el); if (nb) nb.addEventListener("click", () => edit(null));
     load();
   }
 
   OA.section("categories", { title: "دسته‌بندی‌ها", group: "کاتالوگ", nav: true, icon: "tag", perm: ["manage_categories", "manage_products", "manage_weblogs"], render: renderCategories });
   OA.section("brands", { title: "برندها", group: "کاتالوگ", nav: true, icon: "award", perm: ["manage_brands", "manage_products"], render: renderBrands });
-  void fail;
+  void toast;
 })();

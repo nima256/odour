@@ -150,7 +150,7 @@ test.describe("admin panel (integration)", { skip }, () => {
     assert.equal((await c.login("ROOT@test.local", "root-password-123")).status, 200);
     const page = await c.call("/admin", { headers: { Accept: "text/html" } });
     assert.equal(page.status, 200);
-    assert.match(page.text, /oa-boot/);
+    assert.match(page.text, /ox-boot/);
     const noToken = await c.call("/admin/api/v2/products/bulk", { method: "POST", body: { ids: [String(ids.simple)], action: "publish" }, headers: { "X-CSRF-Token": "" } });
     assert.equal(noToken.status, 403);
     const anon = await client().call("/admin/api/v2/dashboard");

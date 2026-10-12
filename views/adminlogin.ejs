@@ -2,45 +2,58 @@
 <html lang="fa" dir="rtl">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="robots" content="noindex, nofollow">
-  <title>ورود به پنل مدیریت اودر</title>
+  <meta name="theme-color" content="#0b1220">
+  <title>ورود · Odour Control</title>
   <link rel="stylesheet" href="/admin-assets/admin.css?v=<%= assetVersion %>">
 </head>
-<body class="oa">
-  <div class="oa-login">
-    <aside class="oa-login__art" aria-hidden="true">
-      <div class="oa-brand" style="padding:0">
-        <div class="oa-brand__mark">OD</div>
-        <div><div class="oa-brand__name" style="color:#f1ece3">ODOUR</div><div class="oa-brand__sub">Fragrance & Beauty</div></div>
-      </div>
-      <div>
-        <h2>هر رایحه، یک داستان؛ هر سفارش، یک تجربه.</h2>
-        <p>پنل مدیریت فروشگاه اودر — سفارش‌ها، کاتالوگ، موجودی و گزارش‌ها در یک جا.</p>
-      </div>
-      <span style="font-size:12px;color:rgba(241,236,227,.4)">© Odour</span>
-    </aside>
-    <main class="oa-login__form">
-      <form class="oa-login__card" id="login-form" novalidate>
-        <h1>ورود به پنل مدیریت</h1>
-        <p>با ایمیل و رمز عبور حساب مدیریت وارد شوید.</p>
-        <div class="oa-note oa-note--bad" id="login-error" role="alert" style="margin-bottom:16px<%= error ? '' : ';display:none' %>"><span id="login-error-text"><%= error %></span></div>
-        <div class="oa-stack" style="gap:14px">
-          <label class="oa-field"><span>ایمیل</span><input class="oa-input ltr" style="height:46px;text-align:left" type="email" name="email" id="email" autocomplete="username" required autofocus></label>
-          <label class="oa-field"><span>رمز عبور</span>
-            <div style="position:relative">
-              <input class="oa-input ltr" style="height:46px;text-align:left;padding-inline-end:44px" type="password" name="password" id="password" autocomplete="current-password" required>
-              <button type="button" class="oa-btn oa-btn--ghost oa-btn--icon oa-btn--sm" id="toggle-pw" style="position:absolute;top:7px;inset-inline-end:6px" aria-label="نمایش رمز عبور" aria-pressed="false">
-                <svg class="oa-icon oa-icon--sm" viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>
-              </button>
-            </div>
-          </label>
-          <button class="oa-btn oa-btn--primary" type="submit" id="submit" style="height:46px;width:100%">ورود</button>
+<body class="ox" style="background:#0b1220">
+  <main class="ox-login">
+    <svg class="ox-login__lines" viewBox="0 0 1200 800" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+      <g fill="none" stroke="#4355e8" stroke-opacity=".22" stroke-width="1">
+        <path d="M-50 640 L380 640 L460 560 L1250 560"/>
+        <path d="M-50 180 L260 180 L320 240 L1250 240"/>
+        <path d="M820 -20 L820 120 L880 180 L880 820"/>
+      </g>
+      <g fill="#0d9488" fill-opacity=".55"><rect x="456" y="556" width="8" height="8" rx="1.5"/><rect x="316" y="236" width="8" height="8" rx="1.5"/><rect x="876" y="176" width="8" height="8" rx="1.5"/></g>
+    </svg>
+    <div style="position:relative;z-index:1;width:min(440px,100%)">
+      <form class="ox-login__panel" id="login-form" novalidate>
+        <div class="ox-login__brand">
+          <div class="ox-mark" aria-hidden="true">O</div>
+          <div><b>ODOUR</b><span>ADMIN WORKSPACE</span></div>
         </div>
-        <p style="margin:24px 0 0;font-size:12px" class="oa-muted">پس از چند تلاش ناموفق، ورود برای ۱۵ دقیقه محدود می‌شود.</p>
+        <h1>ورود به پنل مدیریت</h1>
+        <p class="ox-login__lead">برای ادامه، با ایمیل و رمز عبور حساب مدیریت وارد شوید.</p>
+        <div class="ox-note ox-note--danger" id="login-error" role="alert" style="margin-bottom:18px<%= error ? '' : ';display:none' %>">
+          <svg class="ox-i ox-i--s" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 2 20h20L12 3Z"/><path d="M12 10v4"/><path d="M12 17.5v.01"/></svg>
+          <span id="login-error-text"><%= error %></span>
+        </div>
+        <div class="ox-col" style="gap:16px">
+          <label class="ox-field">
+            <span class="ox-label">ایمیل</span>
+            <input class="ox-input ox-input--ltr" style="height:46px" type="email" name="email" id="email" autocomplete="username" inputmode="email" required autofocus aria-describedby="login-error-text">
+          </label>
+          <label class="ox-field">
+            <span class="ox-label">رمز عبور</span>
+            <span style="position:relative;display:block">
+              <input class="ox-input ox-input--ltr" style="height:46px;padding-left:46px" type="password" name="password" id="password" autocomplete="current-password" required>
+              <button type="button" class="ox-btn ox-btn--ghost ox-btn--sm ox-btn--icon" id="toggle-pw" style="position:absolute;left:7px;top:7px" aria-label="نمایش رمز عبور" aria-pressed="false">
+                <svg class="ox-i ox-i--s" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>
+              </button>
+            </span>
+          </label>
+          <button class="ox-btn ox-btn--primary ox-btn--lg ox-btn--block" type="submit" id="submit" style="height:48px;margin-top:4px">ورود به پنل</button>
+        </div>
+        <div class="ox-login__foot">
+          <svg class="ox-i ox-i--s" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
+          <span>اتصال امن · پس از چند تلاش ناموفق، ورود ۱۵ دقیقه محدود می‌شود.</span>
+        </div>
       </form>
-    </main>
-  </div>
+      <div class="ox-login__meta">ODOUR CONTROL · COMMERCE OPERATIONS</div>
+    </div>
+  </main>
   <script>
     (function () {
       var form = document.getElementById("login-form");
@@ -53,12 +66,19 @@
         var show = pw.type === "password";
         pw.type = show ? "text" : "password";
         this.setAttribute("aria-pressed", String(show));
+        this.setAttribute("aria-label", show ? "پنهان کردن رمز عبور" : "نمایش رمز عبور");
       });
       form.addEventListener("submit", async function (e) {
         e.preventDefault();
         var email = form.email.value.trim();
         var password = form.password.value;
-        if (!email || !password) return showError("ایمیل و رمز عبور را وارد کنید.");
+        form.email.removeAttribute("aria-invalid");
+        form.password.removeAttribute("aria-invalid");
+        if (!email || !password) {
+          if (!email) form.email.setAttribute("aria-invalid", "true");
+          if (!password) form.password.setAttribute("aria-invalid", "true");
+          return showError("ایمیل و رمز عبور را وارد کنید.");
+        }
         btn.disabled = true;
         btn.setAttribute("aria-busy", "true");
         try {
