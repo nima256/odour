@@ -10,7 +10,7 @@
   function chart(el, data, opts = {}) {
     const type = opts.type || "area";
     const teal = opts.tone === "teal";
-    const color = teal ? "#0d9488" : "#4355e8";
+    const color = teal ? OA.COLORS.accent : OA.COLORS.primary;
     const fmt = opts.format || num;
     if (!data.length || data.every((d) => !Number(d.value))) {
       return set(el, empty({ icon: "chart", title: opts.emptyTitle || "در این بازه داده‌ای ثبت نشده است", text: opts.emptyText || "", compact: true }));
@@ -77,7 +77,7 @@
   }
 
   // Tiny trend line for KPI cards.
-  function spark(values, color = "#4355e8") {
+  function spark(values, color = OA.COLORS.primary) {
     const v = values.map((x) => Number(x) || 0);
     if (v.length < 2 || v.every((x) => !x)) return raw("");
     const W = 200, H = 40, max = Math.max(...v) || 1;

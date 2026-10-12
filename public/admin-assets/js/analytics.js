@@ -58,7 +58,7 @@
               <td class="col-num strong">${money(s.revenue)}</td><td class="col-num">${s.conversion === null ? html`<span class="faint">—</span>` : pct(s.conversion, 2)}</td></tr>`) : html`<tr><td colspan="6">${OA.empty({ icon: "chart", title: "در این بازه داده‌ای ثبت نشده است", compact: true })}</td></tr>`}
           </tbody></table></div></section>
 
-        <section class="ox-panel c-8"><div class="ox-panel__head"><div><div class="ox-panel__title">روند ورود به سایت</div><div class="ox-panel__sub">${st.source ? channelLabel(st.source) : "همه منابع"}${d.range && d.range.from ? ` · ${dayLong(d.range.from)} تا ${dayLong(d.range.to)}` : ""}</div></div><div class="ox-legend"><span><i style="background:#0d9488"></i>ورود روزانه</span></div></div><div class="ox-panel__body" data-trend></div></section>
+        <section class="ox-panel c-8"><div class="ox-panel__head"><div><div class="ox-panel__title">روند ورود به سایت</div><div class="ox-panel__sub">${st.source ? channelLabel(st.source) : "همه منابع"}${d.range && d.range.from ? ` · ${dayLong(d.range.from)} تا ${dayLong(d.range.to)}` : ""}</div></div><div class="ox-legend"><span><i style="background:${OA.COLORS.accent}"></i>ورود روزانه</span></div></div><div class="ox-panel__body" data-trend></div></section>
         <section class="ox-panel c-4"><div class="ox-panel__head"><div class="ox-panel__title">درآمد به تفکیک کانال</div></div><div class="ox-panel__body" data-revenue></div></section>
 
         <section class="ox-panel c-4"><div class="ox-panel__head ox-panel__head--line"><div class="ox-panel__title">${icon("link")}دامنه‌های ارجاع‌دهنده</div></div>

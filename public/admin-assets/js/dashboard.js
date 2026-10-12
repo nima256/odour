@@ -76,9 +76,9 @@
     const kpis = [];
     if (s) kpis.push(kpi({ label: "درآمد موفق در بازه", iconName: "card", value: num(s.range), unit: "تومان", accent: true, go: can("manage_orders") ? "orders?paymentStatus=پرداخت شده" : "",
       meta: html`<div class="ox-kpi__meta"><span>امروز <b>${compact(s.today)}</b></span><span>۷ روز <b>${compact(s.week)}</b></span><span>۳۰ روز <b>${compact(s.month)}</b></span></div>`,
-      spark: OA.spark(series.map((x) => x.revenue), "#7f8cff") }));
+      spark: OA.spark(series.map((x) => x.revenue), OA.COLORS.sage) }));
     if (o) kpis.push(kpi({ label: "سفارش‌های نیازمند اقدام", iconName: "truck", value: num(needs), desc: `در حال پردازش ${num(o.byStatus["در حال پردازش"] || 0)} · بسته‌بندی شده ${num(o.byStatus["بسته بندی شده"] || 0)}`, go: can("manage_orders") ? "orders?status=needs_action" : "" }));
-    if (o) kpis.push(kpi({ label: "سفارش‌های ثبت‌شده در بازه", iconName: "bag", value: num(o.inRange), desc: s ? `${num(s.rangeCount)} فروش موفق · میانگین ${money(s.averageOrder)}` : `امروز ${num(o.newToday)} سفارش`, spark: OA.spark(series.map((x) => x.orders), "#4355e8"), go: can("manage_orders") ? "orders" : "" }));
+    if (o) kpis.push(kpi({ label: "سفارش‌های ثبت‌شده در بازه", iconName: "bag", value: num(o.inRange), desc: s ? `${num(s.rangeCount)} فروش موفق · میانگین ${money(s.averageOrder)}` : `امروز ${num(o.newToday)} سفارش`, spark: OA.spark(series.map((x) => x.orders), OA.COLORS.primary), go: can("manage_orders") ? "orders" : "" }));
     if (d.customers) kpis.push(kpi({ label: "مشتریان جدید", iconName: "users", value: num(d.customers.newInRange), desc: `از مجموع ${num(d.customers.total)} مشتری`, go: can("manage_users") ? "customers" : "" }));
     if (!s && p) kpis.push(kpi({ label: "محصولات منتشر شده", iconName: "box", value: num(p.published), desc: `از ${num(p.total)} محصول`, go: "products" }));
     if (!d.customers && p) kpis.push(kpi({ label: "کالاهای ناموجود", iconName: "layers", value: num(p.outOfStock), desc: `${num(p.lowStock)} کالا رو به اتمام`, go: "inventory?stock=out" }));
@@ -121,7 +121,7 @@
 
     if (series.length) {
       const drawChart = (which) => {
-        $("[data-legend]", box).innerHTML = which === "revenue" ? '<span><i style="background:#4355e8"></i>درآمد موفق روزانه (تومان)</span>' : '<span><i style="background:#0d9488"></i>تعداد سفارش‌های ثبت‌شده در روز</span>';
+        $("[data-legend]", box).innerHTML = which === "revenue" ? `<span><i style="background:${OA.COLORS.primary}"></i>درآمد موفق روزانه (تومان)</span>` : `<span><i style="background:${OA.COLORS.accent}"></i>تعداد سفارش‌های ثبت‌شده در روز</span>`;
         OA.chart($("[data-chart]", box), series.map((x) => which === "revenue"
           ? { label: dayLabel(x.day), full: dayLong(x.day), value: x.revenue, tip: money(x.revenue) }
           : { label: dayLabel(x.day), full: `${dayLong(x.day)} · ${num(x.successful)} موفق`, value: x.orders, tip: `${num(x.orders)} سفارش` }),

@@ -208,12 +208,22 @@
 
   // --------------------------------------------------------- semantics
   const ORDER_TONE = { "در انتظار پرداخت": "warning", "در حال پردازش": "info", "بسته بندی شده": "primary", "در حال ارسال": "teal", "تحویل داده شد": "success", "لغو شده": "danger" };
-  const ORDER_COLOR = { "در انتظار پرداخت": "#d97706", "در حال پردازش": "#2563eb", "بسته بندی شده": "#4355e8", "در حال ارسال": "#0d9488", "تحویل داده شد": "#059669", "لغو شده": "#dc3545" };
+  // Central colour map for JS-rendered graphics (charts, legends, status bars). Olive range from the
+  // storefront accord palette; amber / green / red stay semantic (pending, delivered, cancelled).
+  const COLORS = {
+    primary: "#636337", deep: "#3b3b22", dark: "#4f4f2c", accent: "#7b7b4c", muted: "#9c9b70", sage: "#b5b38e", pale: "#cfccae", cream: "#e4e1cc",
+    series: ["#636337", "#7b7b4c", "#9c9b70", "#4f4f2c", "#b5b38e", "#3b3b22", "#cfccae", "#e4e1cc"],
+  };
+  const ORDER_COLOR = { "در انتظار پرداخت": "#d97706", "در حال پردازش": COLORS.muted, "بسته بندی شده": COLORS.primary, "در حال ارسال": COLORS.deep, "تحویل داده شد": "#059669", "لغو شده": "#dc3545" };
   const PAY_TONE = { "پرداخت شده": "success", "پرداخت نشده": "warning", "در حال بررسی": "info", "لغو شده": "danger", "نامشخص": "" };
   const chip = (t, tone = "", plain = false) => html`<span class="ox-chip ${tone ? `ox-chip--${tone}` : ""} ${plain ? "ox-chip--plain" : ""}">${t}</span>`;
   const orderChip = (s) => chip(s || "—", ORDER_TONE[s]);
   const payChip = (s) => chip(s || "—", PAY_TONE[s]);
-  const CHANNEL_GLYPH = { google: ["G", "#4355e8"], torob: ["T", "#e1484f"], snapp: ["S", "#0d9488"], instagram: ["IG", "#b4447d"], other_search: ["SE", "#5b6b88"], social: ["SN", "#3b6fb6"], referral: ["R", "#7a6a3a"], campaign: ["UTM", "#111827"], direct: ["D", "#334155"], unknown: ["?", "#94a3b8"] };
+  const CHANNEL_GLYPH = {
+    // External services keep their own brand colours (Google, Torob, Snapp, Instagram);
+    // generic channels use the olive range.
+    google: ["G", "#4285f4"], torob: ["T", "#e1484f"], snapp: ["S", "#0d9488"], instagram: ["IG", "#b4447d"],
+    other_search: ["SE", "#7b7b4c"], social: ["SN", "#4f4f2c"], referral: ["R", "#9c9b70"], campaign: ["UTM", "#3b3b22"], direct: ["D", "#636337"], unknown: ["?", "#787763"] };
   const channelLabel = (k) => (boot.channels || {})[k || "unknown"] || k || "نامشخص";
   const glyph = (k) => { const [g, c] = CHANNEL_GLYPH[k] || CHANNEL_GLYPH.unknown; return html`<span class="ox-src__glyph" style="background:${c}">${g}</span>`; };
   const source = (k, { label = true } = {}) => (k ? html`<span class="ox-src">${glyph(k)}${label ? channelLabel(k) : ""}</span>` : html`<span class="ox-src ox-src--none">${glyph("unknown")}${label ? "ردیابی نشده" : ""}</span>`);
@@ -462,7 +472,7 @@
     num, money, pct, compact, date, time, dateTime, dayLabel, dayLong, todayLong, tehranToday, dayKey, ago, toEn, intOrNull, objectId,
     api, upload, toast, fail, modal, confirm, busy, menu,
     skeletonTable, skeletonBlock, empty, errorBox, debounce, can,
-    chip, orderChip, payChip, source, glyph, channelLabel, ORDER_TONE, ORDER_COLOR,
+    chip, orderChip, payChip, source, glyph, channelLabel, ORDER_TONE, ORDER_COLOR, COLORS,
     pageHead, workHead, pager, list, router, section, sections, NAV, rangePicker, protect, setQuick, field, toggle,
   };
 })();

@@ -32,10 +32,17 @@ Brands · Discount codes · Banners · Blog · Admins & permissions · Activity 
 
 ## Design system ("ODOUR Control")
 
-* **Palette** (CSS custom properties on `:root` in `admin.css`): navigation `#0B1220` /
-  `#172238`, app background `#F3F6FB`, surfaces `#FFFFFF` / `#F8FAFD`, text `#111827` /
-  `#64748B`, primary cobalt `#4355E8` (hover `#3444C9`), teal `#0D9488` (charts, stock),
-  borders `#E2E8F0`, success `#059669`, warning `#D97706`, danger `#DC3545`.
+* **Palette** — the Odour olive-green brand. The olive range comes from the storefront's
+  accord palette in `views/ProductDetails.ejs` (`#3B3B22 #4F4F2C #636337 #7B7B4C #9C9B70
+  #B5B38E #CFCCAE #E4E1CC`) and the cream `#FFFCF3` theme colour. Tokens on `:root` in
+  `admin.css`: navigation `#3B3B22` / `#4F4F2C` with cream text and sage (`#B5B38E`) icons
+  and active indicator, background `#FFFCF3`, surfaces `#FFFFFF` / `#F6F5EC`, text
+  `#302F23` / `#72715D`, borders `#E4E1CC` / `#CFCCAE`, primary `#636337` (hover
+  `#4F4F2C`), secondary accent `#7B7B4C`. Success, warning and danger stay green / amber /
+  red. Colours drawn from JavaScript (charts, sparklines, legends, status bars) come from
+  `OA.COLORS` in `core.js`. Channel badges for external services (Google, Torob, Snapp,
+  Instagram) keep their own brand colours, and the product editor's Google result preview
+  keeps Google's colours.
 * **Type**: Vazirmatn; page titles 29–31px, KPI values 30–38px, tabular numerals.
 * **Geometry**: 8px spacing grid, cards 10px radius, inputs/buttons 8px, dialogs 12px,
   rectangular status chips.
