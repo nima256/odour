@@ -11,6 +11,7 @@ const fs = require("fs");
 const { SitemapStream, streamToPromise } = require("sitemap");
 const { createGzip } = require("zlib");
 const Visit = require("./models/Visit");
+const { attributionMiddleware, visitFields } = require("./helper/attribution");
 const crypto = require("crypto"); 
 const compression = require('compression');
  
@@ -199,6 +200,9 @@ app.use((req, res, next) => {
   next();
 });
 
+// Traffic-source attribution (cookie + per-visit classification). Never blocks a request.
+app.use(attributionMiddleware);
+
 app.use(async (req, res, next) => {
   if (
     req.method === "GET" &&
@@ -233,6 +237,7 @@ app.use(async (req, res, next) => {
           referer: req.headers["referer"] || "",
           visitDate: getPersianDate(),
           visitTimestamp: new Date(),
+          ...visitFields(req),
         });
       }
     } catch (error) {

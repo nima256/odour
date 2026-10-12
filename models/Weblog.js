@@ -40,11 +40,15 @@ const weblogSchema = mongoose.Schema(
       {
         type: String,
         validate: {
+          // Uploaded images are stored as site paths (/uploads/...); external ones as URLs.
           validator: function (v) {
-            return validator.isURL(v, {
-              protocols: ["http", "https"],
-              require_protocol: true,
-            });
+            return (
+              (/^\/uploads\/[^\s]+$/.test(v) && !v.includes("..")) ||
+              validator.isURL(v, {
+                protocols: ["http", "https"],
+                require_protocol: true,
+              })
+            );
           },
           message: "آدرس تصویر نامعتبر است",
         },

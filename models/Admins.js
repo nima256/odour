@@ -42,8 +42,18 @@ const adminSchema = new mongoose.Schema(
         'manage_discounts',
         'manage_weblogs',
         'view_analytics',
-        'manage_admins'  // دسترسی مدیریت ادمین‌ها
+        'manage_admins',  // دسترسی مدیریت ادمین‌ها
+        'manage_banners',
+        'manage_inventory',
       ]
+    },
+    // false (all accounts created before the permission UI existed): a role "admin"
+    // with an empty permission list keeps the full access it always had, except admin
+    // management. Becomes true once a super admin saves this account's permissions,
+    // after which exactly `permissions` applies. See effectivePermissions().
+    permissionsManaged: {
+      type: Boolean,
+      default: false,
     },
     lastLoginAt: {
       type: Date
@@ -99,11 +109,29 @@ adminSchema.methods.comparePassword = async function(candidatePassword) {
   return await bcrypt.compare(candidatePassword, this.password);
 };
 
+const ALL_PERMISSIONS = adminSchema.path('permissions').caster.enumValues.slice();
+
+// Permissions actually enforced for this admin (server-side, see middlewares/adminAuth.js).
+function effectivePermissions(admin) {
+  if (!admin) return [];
+  if (admin.role === 'super_admin') return ALL_PERMISSIONS.slice();
+  const own = Array.isArray(admin.permissions) ? admin.permissions : [];
+  if (admin.permissionsManaged === true || own.length) return own.filter((p) => ALL_PERMISSIONS.includes(p));
+  // Legacy account: unchanged full access, but never admin management.
+  return ALL_PERMISSIONS.filter((p) => p !== 'manage_admins');
+}
+
 // متد بررسی دسترسی
 adminSchema.methods.hasPermission = function(permission) {
-  if (this.role === 'super_admin') return true;
-  return this.permissions.includes(permission);
+  return effectivePermissions(this).includes(permission);
 };
+
+adminSchema.methods.effectivePermissions = function() {
+  return effectivePermissions(this);
+};
+
+adminSchema.statics.ALL_PERMISSIONS = ALL_PERMISSIONS;
+adminSchema.statics.effectivePermissions = effectivePermissions;
 
 const Admin = mongoose.model("Admin", adminSchema);
 module.exports = Admin;

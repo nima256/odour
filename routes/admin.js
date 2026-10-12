@@ -9,13 +9,11 @@ const multer = require("multer");
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
 
-const User = require("../models/User");
 const Product = require("../models/Product");
 const Order = require("../models/Order");
 const Category = require("../models/Category");
 const Brand = require("../models/Brand");
 const DiscountCode = require("../models/DiscountCode");
-const Visit = require("../models/Visit");
 const RecentAction = require("../models/RecentAction");
 const AdminNotification = require("../models/AdminNotification");
 const snappPayService = require("../services/snappPayService");
@@ -32,13 +30,27 @@ const {
 const { getPersianDate } = require("../helper/getPersianDate");
 const Weblog = require("../models/Weblog");
 const Banner = require("../models/Banner");
-const { buildDashboard } = require("../helper/adminDashboard");
 const { normalizeProductExtras } = require("../helper/productExtras");
 const variantMatrix = require("../services/variantMatrix");
 
-const { isAdminLoggedIn } = require("../middlewares/adminAuth");
+const {
+  isAdminLoggedIn,
+  legacyPermissionGuard,
+  ensureCsrfToken,
+  verifyCsrf,
+} = require("../middlewares/adminAuth");
 const { logAfterAction } = require("../middlewares/recentAction");
+const Admin = require("../models/Admins");
+const { CHANNELS } = require("../helper/attribution");
 
+// Vazirmatn web fonts for the admin UI, served from the npm package (public, cacheable).
+router.use(
+  "/fonts/vazirmatn",
+  express.static(path.join(__dirname, "..", "node_modules", "vazirmatn", "fonts", "webfonts"), {
+    maxAge: "30d",
+    immutable: true,
+  })
+);
 
 // این middleware رو برای همه روت‌ها به جز لاگین اعمال کن
 router.use((req, res, next) => {
@@ -55,6 +67,72 @@ router.use((req, res, next) => {
 
 router.use(express.json());
 router.use(express.urlencoded({ extended: true }));
+
+// Every state-changing admin request must carry the session's CSRF token, and every
+// admin endpoint is checked against the admin's permissions on the server.
+router.use((req, res, next) => (req.path === "/login" ? next() : verifyCsrf(req, res, next)));
+router.use(legacyPermissionGuard);
+
+// Activity log for the pre-existing mutation endpoints (products already log themselves).
+// A RecentAction is written only after a successful JSON response.
+const AUDIT_RULES = [
+  ["POST", /^\/categories\/add$/, "create_category", "category", (d) => d.category],
+  ["PUT", /^\/categories\/edit\/([a-f0-9]{24})$/, "update_category", "category", (d) => d.category],
+  ["DELETE", /^\/categories\/delete\/([a-f0-9]{24})$/, "delete_category", "category", (d) => d.category],
+  ["POST", /^\/brands\/add$/, "create_brand", "brand", (d) => d.brand],
+  ["PUT", /^\/brands\/edit\/([a-f0-9]{24})$/, "update_brand", "brand", (d) => d.brand],
+  ["DELETE", /^\/brands\/delete\/([a-f0-9]{24})$/, "delete_brand", "brand", (d) => d.brand],
+  ["POST", /^\/discounts\/add$/, "create_discount", "discount", (d) => d.discount],
+  ["PUT", /^\/discounts\/edit\/([a-f0-9]{24})$/, "update_discount", "discount", (d) => d.discount],
+  ["DELETE", /^\/discounts\/delete\/([a-f0-9]{24})$/, "delete_discount", "discount", (d) => d.discount],
+  ["POST", /^\/weblogs\/add$/, "create_weblog", "weblog", (d) => d.weblog],
+  ["PUT", /^\/weblogs\/edit\/([a-f0-9]{24})$/, "update_weblog", "weblog", (d) => d.weblog],
+  ["DELETE", /^\/(?:api\/)?weblogs\/delete\/([a-f0-9]{24})$/, "delete_weblog", "weblog", (d) => d.weblog],
+  ["PUT", /^\/orders\/edit\/([a-f0-9]{24})$/, "update_order_status", "order", (d) => d.data],
+  ["POST", /^\/orders\/([a-f0-9]{24})\/(snappay|torobpay)\/(update|cancel|sync)$/, "order_payment_action", "order", (d) => d.order],
+  ["POST", /^\/banners$/, "create_banner", "banner", (d) => d.banner],
+  ["PUT", /^\/banners\/([a-f0-9]{24})$/, "update_banner", "banner", (d) => d.banner],
+  ["POST", /^\/banners\/([a-f0-9]{24})\/toggle$/, "update_banner", "banner", (d) => d.banner],
+  ["DELETE", /^\/banners\/([a-f0-9]{24})$/, "delete_banner", "banner", (d) => d.banner],
+];
+
+router.use((req, res, next) => {
+  const rule = AUDIT_RULES.find(([method, rx]) => method === req.method && rx.test(req.path));
+  if (!rule || !req.admin) return next();
+  const [, rx, action, targetType, pick] = rule;
+  const match = req.path.match(rx);
+  const originalJson = res.json;
+  res.json = function (data) {
+    try {
+      if (data && data.success && res.statusCode < 400) {
+        const doc = (pick(data) || {});
+        const targetId = String(doc._id || doc.id || match[1] || "");
+        if (mongoose.Types.ObjectId.isValid(targetId)) {
+          let details = "";
+          if (action === "update_order_status") details = `وضعیت جدید: ${req.body.status || ""}`;
+          if (action === "order_payment_action") details = `${match[2]} ${match[3]}`;
+          RecentAction.create({
+            action,
+            targetType,
+            targetId,
+            targetName: String(doc.name || doc.code || doc.title || doc.OrderNum || req.body.name || req.body.code || req.body.title || targetId).slice(0, 200),
+            adminId: req.admin._id,
+            adminName: req.admin.fullName,
+            details,
+            ipAddress: req.ip,
+          }).catch((error) => console.error("Audit log error:", error.message));
+        }
+      }
+    } catch (error) {
+      console.error("Audit log error:", error.message);
+    }
+    return originalJson.call(this, data);
+  };
+  next();
+});
+
+// New JSON API used by the redesigned panel (paginated lists, analytics, inventory...).
+router.use("/api/v2", require("./adminApi"));
 
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
@@ -184,7 +262,14 @@ async function moveImagesToProductFolder(productId, productName, images, caption
   
   return { processedImages, urlMap };
 }
-const upload = multer({ storage });
+// Images only: uploads end up under /public and are served from our own origin.
+const IMAGE_MIME = /^image\/(jpe?g|png|webp|gif|avif)$/i;
+const IMAGE_EXT = /\.(jpe?g|png|webp|gif|avif)$/i;
+const upload = multer({
+  storage,
+  limits: { fileSize: 10 * 1024 * 1024, files: 20 },
+  fileFilter: (req, file, cb) => cb(null, IMAGE_MIME.test(file.mimetype) && IMAGE_EXT.test(file.originalname || "")),
+});
 
 const retryUnlink = async (filePath, retries = 5, delay = 100) => {
   for (let i = 0; i < retries; i++) {
@@ -336,17 +421,32 @@ router.post(
 
 router.delete("/delete-image", async (req, res) => {
   try {
-    const { filename, productId, productName } = req.body;
+    const { productId, productName } = req.body;
+    // Only a bare file name is accepted (no "../" path traversal).
+    const filename = path.basename(String(req.body.filename || ""));
 
-    if (!filename) {
+    if (!filename || filename === "." || filename === "..") {
       return res.status(400).json({ error: "Filename is required" });
+    }
+
+    // Never remove a file that a saved product still uses (duplicated products share images).
+    const escaped = filename.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const stillUsed = await Product.exists({
+      $or: [
+        { "images.url": { $regex: `/${escaped}$` } },
+        { "colors.image.url": { $regex: `/${escaped}$` } },
+        { "fragrance.identityImage.url": { $regex: `/${escaped}$` } },
+      ],
+    });
+    if (stillUsed) {
+      return res.status(200).json({ success: true, kept: true });
     }
 
     let fileDeleted = false;
 
     
-    if (productId && productName) {
-      const sanitizedProductName = productName
+    if (productId && productName && mongoose.Types.ObjectId.isValid(String(productId))) {
+      const sanitizedProductName = String(productName)
         .replace(/[^a-zA-Z0-9\u0600-\u06FF\s]/g, '')
         .trim()
         .replace(/\s+/g, '_');
@@ -395,203 +495,47 @@ router.delete("/delete-image", async (req, res) => {
   }
 });
 
-router.get("/", async (req, res) => {
-  const loggedInAdmin = req.admin;
-
-  const users = await User.find({});
-  const products = await Product.find({})
-    .populate("category")
-    .populate("brand");
-  const categories = await Category.find({ categoryType: "product" });
-  const orders = await Order.find({}).populate("user").populate("products");
-  const brands = await Brand.find({});
-  const discounts = await DiscountCode.find({});
-  const weblogs = await Weblog.find({});
-
-  // ========== آمار بازدیدها ==========
-  
-  // کل بازدیدهای کل سایت
-  const totalVisits = await Visit.countDocuments();
-  
-  // بازدیدهای امروز
-  const today = getPersianDate();
-  const todayVisits = await Visit.countDocuments({ visitDate: today });
-  
-  // بازدیدهای دیروز
-  const yesterday = new Date();
-  yesterday.setDate(yesterday.getDate() - 1);
-  const yesterdayStr = getPersianDate(yesterday);
-  const yesterdayVisits = await Visit.countDocuments({ visitDate: yesterdayStr });
-  
-  // درصد تغییر بازدید نسبت به دیروز
-  let visitsChangePercent = 0;
-  if (yesterdayVisits > 0) {
-    visitsChangePercent = ((todayVisits - yesterdayVisits) / yesterdayVisits) * 100;
-  }
-  
-  // پربازدیدترین صفحات (آخرین 30 روز)
-  const topPages = await Visit.aggregate([
-    {
-      $match: {
-        visitTimestamp: { $gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) }
-      }
-    },
-    {
-      $group: {
-        _id: "$path",
-        count: { $sum: 1 },
-        title: { $first: "$title" }
-      }
-    },
-    { $sort: { count: -1 } },
-    { $limit: 10 }
-  ]);
-  
-  // بازدیدهای 7 روز اخیر برای نمودار
-  const last7Days = [];
-  for (let i = 6; i >= 0; i--) {
-    const date = new Date();
-    date.setDate(date.getDate() - i);
-    const dateStr = getPersianDate(date);
-    const count = await Visit.countDocuments({ visitDate: dateStr });
-    last7Days.push({
-      date: dateStr,
-      count: count
+// The panel is a single shell; every section loads its data through paginated JSON
+// endpoints (routes/adminApi.js) instead of loading whole collections here.
+router.get("/", async (req, res, next) => {
+  try {
+    const admin = req.admin;
+    res.set("Cache-Control", "no-store");
+    res.render("AdminPanel", {
+      csrfToken: ensureCsrfToken(req),
+      adminBoot: {
+        admin: {
+          id: String(admin._id),
+          fullName: admin.fullName,
+          email: admin.email,
+          role: admin.role,
+          lastLoginAt: admin.lastLoginAt || null,
+        },
+        permissions: req.adminPermissions,
+        allPermissions: Admin.ALL_PERMISSIONS,
+        orderStatuses: Order.schema.path("status").enumValues,
+        paymentStatuses: Order.schema.path("paymentStatus").enumValues,
+        paymentMethods: Order.schema.path("paymentMethod").enumValues,
+        deliveryMethods: Order.schema.path("delivery").enumValues,
+        bannerPlacements: Banner.PLACEMENTS,
+        channels: CHANNELS,
+        siteUrl: process.env.SITE_URL || "",
+      },
     });
+  } catch (error) {
+    next(error);
   }
-  
-  // بازدیدهای هر ماه (برای نمودار سالانه)
-const allOrders = await Order.find({ status: { $ne: "لغو شده" } });
-
-const monthlyStats = {};
-
-allOrders.forEach(order => {
-  if (order.createTarikh) {
-    let tarikh = order.createTarikh;
-    
-    // تبدیل اعداد فارسی به انگلیسی در createTarikh
-    tarikh = tarikh.replace(/[۰-۹]/g, d => '0123456789'['۰۱۲۳۴۵۶۷۸۹'.indexOf(d)]);
-    
-    const parts = tarikh.split('-');
-    if (parts.length >= 2) {
-      const year = parts[0];
-      let month = parts[1];
-      
-      // حذف کاراکترهای غیرعددی و اطمینان از دو رقمی بودن
-      month = month.replace(/\D/g, '');
-      if (month.length === 1) {
-        month = `0${month}`;
-      }
-      
-      const key = `${year}-${month}`;
-      
-      if (!monthlyStats[key]) {
-        monthlyStats[key] = {
-          month: key,
-          orderCount: 0,
-          totalSales: 0
-        };
-      }
-      monthlyStats[key].orderCount++;
-      monthlyStats[key].totalSales += (order.totalPrice || 0);
-    }
-  }
-});
-
-// تبدیل به آرایه و مرتب‌سازی
-const formattedMonthlyStats = Object.values(monthlyStats)
-  .sort((a, b) => a.month.localeCompare(b.month))
-  .slice(-6);
-
-  function formatPageInfo(path) {
-    if (path === '/') {
-      return { name: 'صفحه اصلی', link: '/' };
-    }
-    
-    if (path.startsWith('/productDetails/')) {
-      const slug = path.replace('/productDetails/', '');
-      const name = decodeURIComponent(slug).replace(/-/g, ' ');
-      return { name: name, link: path };
-    }
-    
-    if (path.startsWith('/category/')) {
-      const catName = decodeURIComponent(path.replace('/category/', '')).replace(/-/g, ' ');
-      return { name: `دسته: ${catName}`, link: path };
-    }
-    
-    if (path.startsWith('/weblog/')) {
-      const blogTitle = decodeURIComponent(path.replace('/weblog/', '')).replace(/-/g, ' ');
-      return { name: `مقاله: ${blogTitle}`, link: path };
-    }
-    
-    // صفحات دیگر مثل /about-us, /contact-us و ...
-    let name = path.replace(/^\//, '').replace(/-/g, ' ');
-    name = name.split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
-    
-    return { name: name || path, link: path };
-  }
-
-  // در جایی که topPages رو پردازش می‌کنی:
-  const formattedTopPages = topPages.map(page => {
-      const formatted = formatPageInfo(page._id);
-      return {
-          count: page.count,
-          title: page.title,
-          displayName: formatted.name,
-          link: formatted.link
-      };
-  });
-
-  const statusCounts = {
-    pendingProcessing: await Order.countDocuments({ status: "در حال پردازش" }),
-    inShipping: await Order.countDocuments({ status: "در حال ارسال" }),
-    delivered: await Order.countDocuments({ status: "تحویل داده شد" }),
-    cancelled: await Order.countDocuments({ status: "لغو شده" }),
-    totalOrders: orders.length,
-  };
-
-  const [dashboard, banners] = await Promise.all([
-    buildDashboard(),
-    Banner.find({}).sort({ placement: 1, order: 1, createdAt: 1 }).lean(),
-  ]);
-
-  res.render("AdminPanel", {
-    dashboard,
-    banners,
-    bannerPlacements: Banner.PLACEMENTS,
-    users,
-    products,
-    categories,
-    orders,
-    brands,
-    statusCounts,
-    discounts,
-    weblogs,
-    admin: loggedInAdmin,
-    visitStats: {
-      totalVisits,
-      todayVisits,
-      yesterdayVisits,
-      visitsChangePercent,
-      topPages: formattedTopPages,
-      last7Days,
-      monthlyOrders: formattedMonthlyStats.map(stat => ({
-        month: stat.month,
-        orderCount: stat.orderCount,
-        totalSales: stat.totalSales  // اضافه کردن فروش
-      }))
-    },
-  });
 });
 
 router.get("/login", async (req, res) => {
-  if (req.session && req.session.userId) {
-    const user = await User.findById(req.session.userId);
-    if (user && (user.role === 'admin' || user.role === 'super_admin')) {
-      return res.redirect('/admin');
-    }
+  // An admin with a live session goes straight to the panel (the old check looked at
+  // the storefront user's role, which never matched an Admin account).
+  if (req.session && req.session.adminId) {
+    const admin = await Admin.findById(req.session.adminId).select("isActive").lean();
+    if (admin && admin.isActive !== false) return res.redirect("/admin");
   }
-  res.render("adminlogin");
+  res.set("Cache-Control", "no-store");
+  res.render("adminlogin", { error: req.query.error === "account_disabled" ? "حساب مدیریت شما غیرفعال شده است." : "" });
 });
 
 router.get("/logout", async (req, res) => {
@@ -897,7 +841,9 @@ router.put("/products/edit/:id",async (req, res, next) => {
     }
 
     const updateData = normalizeProductExtras({ ...req.body });
-    updateData.englishName = updateData.englishName || null;
+    // Partial-update safety: a field that was not sent keeps its stored value.
+    const sent = (field) => Object.prototype.hasOwnProperty.call(req.body, field);
+    if (sent("englishName")) updateData.englishName = updateData.englishName || null;
 
     if (!updateData.slug || !String(updateData.slug).trim()) {
       delete updateData.slug;
@@ -905,9 +851,8 @@ router.put("/products/edit/:id",async (req, res, next) => {
 
     const numericFields = ["price", "countInStock"];
     numericFields.forEach((field) => {
-      if (updateData[field] !== undefined && updateData[field] !== "") {
-        updateData[field] = Number(updateData[field]);
-      }
+      if (updateData[field] === "") delete updateData[field];
+      else if (updateData[field] !== undefined) updateData[field] = Number(updateData[field]);
     });
 
     // اگر وزن خالی یا null ارسال شد، آن را از updateData حذف می‌کنیم
@@ -921,49 +866,69 @@ router.put("/products/edit/:id",async (req, res, next) => {
     }
 
     // null یا رشته خالی برای قیمت ویژه یعنی حذف تخفیف.
-    if (updateData.offerPrice === "" || updateData.offerPrice === null) {
-      updateData.offerPrice = undefined;
-    } else if (updateData.offerPrice !== undefined) {
-      updateData.offerPrice = Number(updateData.offerPrice);
+    // When offerPrice is not sent, the stored offer is re-validated against the new price.
+    let offerPrice;
+    if (sent("offerPrice")) {
+      offerPrice = updateData.offerPrice === "" || updateData.offerPrice === null ? undefined : Number(updateData.offerPrice);
+    } else {
+      offerPrice = product.offerPrice;
     }
 
     const price = updateData.price ?? product.price;
-    if (Number(updateData.offerPrice) > 0 && Number(price) > Number(updateData.offerPrice)) {
-      updateData.discount = Math.round(
-        ((Number(price) - Number(updateData.offerPrice)) / Number(price)) * 100
-      );
+    if (sent("offerPrice") || sent("price")) {
+      if (Number(offerPrice) > 0 && Number(price) > Number(offerPrice)) {
+        updateData.offerPrice = Number(offerPrice);
+        updateData.discount = Math.round(
+          ((Number(price) - Number(offerPrice)) / Number(price)) * 100
+        );
+      } else {
+        updateData.offerPrice = undefined;
+        updateData.discount = 0;
+      }
     } else {
-      updateData.offerPrice = undefined;
-      updateData.discount = 0;
+      delete updateData.offerPrice;
+      delete updateData.discount;
     }
+    const effectiveOffer = sent("offerPrice") || sent("price") ? updateData.offerPrice : product.offerPrice;
 
     // مدیریت دستی ۶ جایگاه SPECIAL OFFER
-    const requestedSpecialOfferPosition = Number(req.body.specialOfferPosition);
-    const hasValidSpecialOfferPosition = Number.isInteger(requestedSpecialOfferPosition) &&
-      requestedSpecialOfferPosition >= 1 && requestedSpecialOfferPosition <= 6;
+    if (sent("specialOfferPosition")) {
+      const requestedSpecialOfferPosition = Number(req.body.specialOfferPosition);
+      const hasValidSpecialOfferPosition = req.body.specialOfferPosition !== null && req.body.specialOfferPosition !== "" &&
+        Number.isInteger(requestedSpecialOfferPosition) &&
+        requestedSpecialOfferPosition >= 1 && requestedSpecialOfferPosition <= 6;
 
-    if (hasValidSpecialOfferPosition) {
-      if (!(Number(updateData.offerPrice) > 0 && Number(updateData.offerPrice) < Number(price))) {
-        return res.status(400).json({
-          success: false,
-          message: "برای قرار گرفتن در SPECIAL OFFER، محصول باید قیمت ویژه معتبر داشته باشد.",
-        });
+      if (hasValidSpecialOfferPosition) {
+        if (!(Number(effectiveOffer) > 0 && Number(effectiveOffer) < Number(price))) {
+          return res.status(400).json({
+            success: false,
+            message: "برای قرار گرفتن در SPECIAL OFFER، محصول باید قیمت ویژه معتبر داشته باشد.",
+          });
+        }
+        updateData.specialOfferPosition = requestedSpecialOfferPosition;
+        // isFeatured برای سازگاری با داده‌ها/کدهای قدیمی همگام نگه داشته می‌شود.
+        updateData.isFeatured = true;
+      } else {
+        updateData.specialOfferPosition = null;
+        updateData.isFeatured = false;
       }
-      updateData.specialOfferPosition = requestedSpecialOfferPosition;
-      // isFeatured برای سازگاری با داده‌ها/کدهای قدیمی همگام نگه داشته می‌شود.
-      updateData.isFeatured = true;
-    } else {
+    } else if (product.specialOfferPosition && !(Number(effectiveOffer) > 0 && Number(effectiveOffer) < Number(price))) {
+      // The offer was removed: the product can no longer occupy a SPECIAL OFFER slot.
       updateData.specialOfferPosition = null;
       updateData.isFeatured = false;
+    } else {
+      delete updateData.specialOfferPosition;
+      delete updateData.isFeatured;
     }
 
     const arrayFields = ["colors", "sizes", "specifications", "tags", "category", "images"];
     arrayFields.forEach((field) => {
-      updateData[field] = Array.isArray(req.body[field]) ? req.body[field] : [];
+      if (sent(field)) updateData[field] = Array.isArray(req.body[field]) ? req.body[field] : [];
+      else delete updateData[field];
     });
 
     // حفظ _id رنگ‌ها باعث می‌شود page_unique و URL ثبت‌شده در ترب ثابت بماند.
-    updateData.colors = updateData.colors
+    if (sent("colors")) updateData.colors = updateData.colors
       .filter((color) => color && String(color.name || "").trim())
       .map((color) => {
         const normalized = {
@@ -992,7 +957,7 @@ router.put("/products/edit/:id",async (req, res, next) => {
 
     // موجودی هر سایز نیز مانند رنگ به‌صورت مستقل قابل مدیریت است.
     // حفظ _id باعث می‌شود شناسه تنوع در سفارش‌های قبلی پایدار بماند.
-    updateData.sizes = updateData.sizes
+    if (sent("sizes")) updateData.sizes = updateData.sizes
       .filter((size) => size && String(size.size || "").trim())
       .map((size) => {
         const normalized = {
@@ -1049,7 +1014,7 @@ router.put("/products/edit/:id",async (req, res, next) => {
         });
 
         updateData.variantStocks = variantMatrix.normalizeRows(
-          { colors: updateData.colors, sizes: updateData.sizes },
+          { colors: updateData.colors || product.colors, sizes: updateData.sizes || product.sizes },
           rowsWithAvailability
         );
 
@@ -1148,7 +1113,7 @@ router.delete("/products/delete/:id",async (req, res, next) => {
           action: 'delete_product',
           targetType: 'product',
           targetId: req.params.id,
-          targetName: data.deletedProductId || req.params.id,
+          targetName: data.deletedProductName || data.deletedProductId || req.params.id,
           adminId: admin._id,
           adminName: admin.fullName,
           details: `حذف محصول`,
@@ -1171,14 +1136,38 @@ router.delete("/products/delete/:id",async (req, res, next) => {
       });
     }
 
+    // Safeguard: an order that still holds reserved stock for this product must be able
+    // to restore it (cancel/revert), so the product cannot be removed until it settles.
+    const openOrders = await Order.countDocuments({
+      "products.product": product._id,
+      inventoryReserved: true,
+      inventoryRestored: { $ne: true },
+      status: { $nin: ["\u0644\u063A\u0648 \u0634\u062F\u0647", "\u062A\u062D\u0648\u06CC\u0644 \u062F\u0627\u062F\u0647 \u0634\u062F"] },
+    });
+    if (openOrders > 0) {
+      return res.status(409).json({
+        success: false,
+        message: `\u0627\u06CC\u0646 \u0645\u062D\u0635\u0648\u0644 \u062F\u0631 ${openOrders} \u0633\u0641\u0627\u0631\u0634 \u0628\u0627\u0632 \u0628\u0627 \u0645\u0648\u062C\u0648\u062F\u06CC \u0631\u0632\u0631\u0648 \u0634\u062F\u0647 \u0648\u062C\u0648\u062F \u062F\u0627\u0631\u062F. \u0628\u0647\u200C\u062C\u0627\u06CC \u062D\u0630\u0641\u060C \u0622\u0646 \u0631\u0627 \u0627\u0632 \u062D\u0627\u0644\u062A \u0627\u0646\u062A\u0634\u0627\u0631 \u062E\u0627\u0631\u062C \u06A9\u0646\u06CC\u062F.`,
+      });
+    }
+
     const sanitizedProductName = product.name
       .replace(/[^a-zA-Z0-9\u0600-\u06FF\s]/g, '')
       .trim()
       .replace(/\s+/g, '_');
-    
+
     const productFolder = path.join("public/uploads/products", `${product._id}_${sanitizedProductName}`);
-    
-    if (fs.existsSync(productFolder)) {
+
+    // Files shared with another product (e.g. a duplicate) must survive this delete.
+    const sharedUrls = new Set(
+      (await Product.find({ _id: { $ne: product._id }, "images.url": { $in: (product.images || []).map((img) => img.url) } })
+        .select("images.url")
+        .lean())
+        .flatMap((p) => (p.images || []).map((img) => img.url))
+    );
+    const folderShared = [...sharedUrls].some((url) => url.startsWith(`/uploads/products/${product._id}_`));
+
+    if (fs.existsSync(productFolder) && !folderShared) {
       // حذف تمام فایل‌های داخل پوشه
       const files = fs.readdirSync(productFolder);
       for (const file of files) {
@@ -1192,7 +1181,8 @@ router.delete("/products/delete/:id",async (req, res, next) => {
     // همچنین تصاویر قدیمی که ممکن است در پوشه قدیمی باشند رو هم پاک کن
     if (product.images && product.images.length > 0) {
       for (const img of product.images) {
-        const oldImagePath = path.join("public/uploads", img.filename);
+        if (!img.filename || sharedUrls.has(img.url)) continue;
+        const oldImagePath = path.join("public/uploads", path.basename(img.filename));
         if (fs.existsSync(oldImagePath)) {
           fs.unlinkSync(oldImagePath);
         }
@@ -1205,6 +1195,7 @@ router.delete("/products/delete/:id",async (req, res, next) => {
       success: true,
       message: "محصول با موفقیت حذف شد",
       deletedProductId: req.params.id,
+      deletedProductName: product.name,
     });
   } catch (error) {
     console.error("Error deleting product:", error);
@@ -1226,7 +1217,21 @@ function categoryPresentation(body) {
   if (body.icon !== undefined) out.icon = /^cat-[a-z-]+$/.test(String(body.icon)) ? String(body.icon) : "";
   if (body.description !== undefined) out.description = String(body.description || "").trim().slice(0, 1000);
   if (body.isActive !== undefined) out.isActive = body.isActive === true || body.isActive === "true";
+  if (body.metaTitle !== undefined) out.metaTitle = String(body.metaTitle || "").trim().slice(0, 60);
+  if (body.metaDescription !== undefined) out.metaDescription = String(body.metaDescription || "").trim().slice(0, 160);
+  if (body.metaKeywords !== undefined) out.metaKeywords = String(body.metaKeywords || "").trim().slice(0, 300);
   return out;
+}
+
+// True when `candidateParentId` is `categoryId` itself or one of its descendants.
+async function createsCategoryCycle(categoryId, candidateParentId) {
+  let current = candidateParentId ? String(candidateParentId) : "";
+  for (let depth = 0; current && depth < 50; depth += 1) {
+    if (current === String(categoryId)) return true;
+    const parent = await Category.findById(current).select("parentId").lean();
+    current = parent && parent.parentId ? String(parent.parentId) : "";
+  }
+  return false;
 }
 
 router.post("/categories/add", async (req, res) => {
@@ -1328,10 +1333,11 @@ router.put("/categories/edit/:id", async (req, res) => {
             });
         }
 
-        // جلوگیری از انتخاب خود دسته‌بندی به عنوان والد
+        // جلوگیری از انتخاب خود دسته‌بندی (یا زیرمجموعه‌هایش) به عنوان والد
         if (
             parentId &&
-            String(parentId) === String(req.params.id)
+            (String(parentId) === String(req.params.id) ||
+              await createsCategoryCycle(req.params.id, parentId))
         ) {
             return res.status(400).json({
                 success: false,
@@ -1381,6 +1387,25 @@ router.put("/categories/edit/:id", async (req, res) => {
 
 router.delete("/categories/delete/:id", async (req, res) => {
   try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ success: false, message: "شناسه دسته‌بندی نامعتبر است" });
+    }
+    // Safeguard: never orphan sub-categories, products or articles.
+    const [children, products, weblogs] = await Promise.all([
+      Category.countDocuments({ parentId: req.params.id }),
+      Product.countDocuments({ category: req.params.id }),
+      Weblog.countDocuments({ categories: req.params.id }),
+    ]);
+    if (children || products || weblogs) {
+      const parts = [];
+      if (children) parts.push(`${children} زیردسته`);
+      if (products) parts.push(`${products} محصول`);
+      if (weblogs) parts.push(`${weblogs} مقاله`);
+      return res.status(409).json({
+        success: false,
+        message: `این دسته‌بندی هنوز ${parts.join("، ")} دارد. ابتدا آن‌ها را منتقل کنید یا دسته را غیرفعال کنید.`,
+      });
+    }
     const category = await Category.findByIdAndDelete(req.params.id);
 
     if (!category) {
@@ -1405,9 +1430,22 @@ router.delete("/categories/delete/:id", async (req, res) => {
 });
 
 // Brand Routes
+// Optional brand fields managed by the admin (logo must be an uploaded image).
+function brandFields(body) {
+  const out = {};
+  if (body.description !== undefined) out.description = String(body.description || "").trim().slice(0, 500);
+  if (body.isActive !== undefined) out.isActive = body.isActive === true || body.isActive === "true";
+  if (body.emoji !== undefined) out.emoji = String(body.emoji || "").trim().slice(0, 8) || null;
+  if (body.logo !== undefined) {
+    const logo = String(body.logo || "").trim();
+    out.logo = logo && logo.startsWith("/uploads/") && !logo.includes("..") ? logo : null;
+  }
+  return out;
+}
+
 router.post("/brands/add", async (req, res) => {
   try {
-    const { name } = req.body;
+    const name = String(req.body.name || "").trim();
 
     if (!name) {
       return res.status(400).json({
@@ -1416,7 +1454,7 @@ router.post("/brands/add", async (req, res) => {
       });
     }
 
-    const brand = new Brand({ name });
+    const brand = new Brand({ name, ...brandFields(req.body) });
     await brand.save();
 
     res.status(201).json({
@@ -1448,7 +1486,8 @@ router.put("/brands/edit/:id", async (req, res) => {
     const updatedBrand = await Brand.findByIdAndUpdate(
       req.params.id,
       {
-        name,
+        name: String(name).trim(),
+        ...brandFields(req.body),
         updateTarikh: getPersianDate(),
       },
       { new: true, runValidators: true }
@@ -1478,6 +1517,17 @@ router.put("/brands/edit/:id", async (req, res) => {
 
 router.delete("/brands/delete/:id", async (req, res) => {
   try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ success: false, message: "شناسه برند نامعتبر است" });
+    }
+    // Every product requires a brand, so a brand in use cannot be deleted.
+    const inUse = await Product.countDocuments({ brand: req.params.id });
+    if (inUse) {
+      return res.status(409).json({
+        success: false,
+        message: `${inUse} محصول به این برند متصل است. ابتدا برند آن‌ها را تغییر دهید یا برند را غیرفعال کنید.`,
+      });
+    }
     const brand = await Brand.findByIdAndDelete(req.params.id);
 
     if (!brand) {
@@ -2180,6 +2230,7 @@ router.put("/orders/edit/:id", async (req, res) => {
     }
 
     order._updatedBy = req.admin?._id;
+    if (req.body.note !== undefined) order._statusNote = String(req.body.note || "").trim().slice(0, 300) || undefined;
     order.status = status;
     await order.save();
     await order.populate("user", "fullName email mobile");
@@ -2355,6 +2406,9 @@ router.post("/discounts/add", async (req, res) => {
             oneTimePerUser,
         } = req.body;
         
+        if (!code || typeof code !== "string") {
+            return res.status(400).json({ success: false, message: "کد تخفیف الزامی است" });
+        }
         // بررسی وجود کد تکراری
         const existingDiscount = await DiscountCode.findOne({ code: code.toUpperCase() });
         if (existingDiscount) {
@@ -2424,6 +2478,17 @@ router.put("/discounts/edit/:id", async (req, res) => {
             oneTimePerUser
         } = req.body;
         
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({ success: false, message: "شناسه تخفیف معتبر نیست" });
+        }
+        if (!code || typeof code !== "string") {
+            return res.status(400).json({ success: false, message: "کد تخفیف الزامی است" });
+        }
+        const currentDiscount = await DiscountCode.findById(id).select("expireDate").lean();
+        if (!currentDiscount) {
+            return res.status(404).json({ success: false, message: "کد تخفیف یافت نشد" });
+        }
+
         // بررسی وجود کد تکراری (به غیر از خودش)
         const existingDiscount = await DiscountCode.findOne({ 
             code: code.toUpperCase(),
@@ -2446,6 +2511,13 @@ router.put("/discounts/edit/:id", async (req, res) => {
             oneTimePerUser: oneTimePerUser || false,
         };
         
+        // An unchanged expiry date is not re-validated ("must be in the future"), so an
+        // already-expired code can still be edited (e.g. deactivated) without a new date.
+        const sameExpiry = (a, b) => (!a && !b) || (a && b && new Date(a).getTime() === new Date(b).getTime());
+        if (sameExpiry(updateData.expireDate, currentDiscount.expireDate)) {
+            delete updateData.expireDate;
+        }
+
         // اضافه کردن maxDiscountAmount برای تخفیف درصدی
         if (type === 'percent' && maxDiscountAmount) {
             updateData.maxDiscountAmount = maxDiscountAmount;
@@ -2611,6 +2683,8 @@ router.post("/weblogs/add", async (req, res) => {
                 return null;
             }).filter(img => img !== null);
         }
+        // Weblog.images is an array of URL strings (see models/Weblog.js).
+        processedImages = processedImages.map(img => img.url);
 
         // تولید slug
         const slug = title
@@ -2707,6 +2781,8 @@ router.put("/weblogs/edit/:id", async (req, res) => {
                 return null;
             }).filter(img => img !== null);
         }
+        // Weblog.images is an array of URL strings (see models/Weblog.js).
+        processedImages = processedImages.map(img => img.url);
 
         // تولید slug جدید
         const slug = title
@@ -2734,6 +2810,19 @@ router.put("/weblogs/edit/:id", async (req, res) => {
             updateTarikh: getPersianDate(),
             updatedAt: Date.now()
         };
+
+        // findByIdAndUpdate skips the model's save hook, so set the publication date here
+        // (previously articles published from the edit form never got publishedAt).
+        const current = await Weblog.findById(id).select("publishedAt").lean();
+        if (!current) {
+            return res.status(404).json({ success: false, message: 'مقاله یافت نشد' });
+        }
+        const requestedPublishedAt = req.body.publishedAt ? new Date(req.body.publishedAt) : null;
+        if (requestedPublishedAt && !Number.isNaN(requestedPublishedAt.getTime())) {
+            updateData.publishedAt = requestedPublishedAt;
+        } else if (updateData.isPublished && !current.publishedAt) {
+            updateData.publishedAt = new Date();
+        }
 
         const weblog = await Weblog.findByIdAndUpdate(
             req.params.id,

@@ -99,6 +99,24 @@ const userSchema = new mongoose.Schema(
         updatedAt: { type: Date, default: Date.now },
       },
     ],
+    // First-touch acquisition captured when the account was created (helper/attribution.js).
+    // Absent for accounts created before tracking existed.
+    acquisition: {
+      type: new mongoose.Schema(
+        {
+          source: String,
+          medium: String,
+          campaign: String,
+          utmSource: String,
+          referrerHost: String,
+          landingPage: String,
+          at: Date,
+          model: String,
+        },
+        { _id: false }
+      ),
+      default: undefined,
+    },
     role: {
       type: String,
       enum: ["user", "admin", "editor"],

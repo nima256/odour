@@ -1,6 +1,22 @@
 const mongoose = require("mongoose");
 const { getPersianDate } = require("../helper/getPersianDate");
 
+// One marketing touch (see helper/attribution.js). Contains no personal data.
+const touchSchema = new mongoose.Schema(
+  {
+    source: String,
+    medium: String,
+    campaign: String,
+    content: String,
+    term: String,
+    utmSource: String,
+    referrerHost: String,
+    landingPage: String,
+    at: Date,
+  },
+  { _id: false }
+);
+
 const orderSchema = new mongoose.Schema(
   {
     OrderNum: {
@@ -266,6 +282,20 @@ const orderSchema = new mongoose.Schema(
       cancelledAt: Date,
       settledAt: Date,
     },
+    // Acquisition source captured from the attribution cookie when the order was
+    // created. Absent on historical orders ("Unknown / Not tracked").
+    acquisition: {
+      type: new mongoose.Schema(
+        {
+          firstTouch: touchSchema,
+          lastTouch: touchSchema,
+          model: String,
+          capturedAt: Date,
+        },
+        { _id: false }
+      ),
+      default: undefined,
+    },
     createTarikh: {
       type: String,
       default: () => getPersianDate(),
@@ -293,6 +323,7 @@ orderSchema.pre("save", function () {
     this.statusHistory.push({
       status: this.status,
       changedBy: this._updatedBy,
+      note: this._statusNote,
     });
   }
 });
@@ -314,5 +345,9 @@ orderSchema.virtual("productDetails", {
 orderSchema.index({ user: 1, status: 1 });
 orderSchema.index({ createTarikh: -1 });
 orderSchema.index({ totalPrice: 1 });
+// Admin list / dashboard / attribution reports.
+orderSchema.index({ createdAt: -1 });
+orderSchema.index({ paymentStatus: 1, createdAt: -1 });
+orderSchema.index({ "acquisition.lastTouch.source": 1, createdAt: -1 });
 
 module.exports = mongoose.model("Order", orderSchema);

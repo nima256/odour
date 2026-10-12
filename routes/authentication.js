@@ -19,6 +19,7 @@ const RecentAction = require("../models/RecentAction");
 const { isLoggedIn } = require("../middlewares/isLoggedIn");
 const rateLimit = require("express-rate-limit");
 const { sendOtpSms } = require("../services/sms");
+const { acquisitionSnapshot } = require("../helper/attribution");
 
 const errorResponse = (res, status, message, details = {}) => {
   return res.status(status).json({
@@ -164,7 +165,11 @@ router.post("/otp/verify", otpVerifyLimiter, async (req, res) => {
     let isNew = false;
     if (!user) {
       try {
-        user = await User.create({ mobile });
+        const acquisition = acquisitionSnapshot(req);
+        user = await User.create({
+          mobile,
+          ...(acquisition && { acquisition: { ...acquisition.firstTouch, model: acquisition.model } }),
+        });
         isNew = true;
       } catch (createError) {
         if (createError.code === 11000) {
@@ -656,9 +661,19 @@ router.post("/admin/logout", async (req, res) => {
   }
 });
 
-router.post("/admin/login", async (req, res) => {
+const adminLoginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: true,
+  message: { success: false, message: "تلاش‌های ناموفق ورود بیش از حد مجاز است. لطفاً ۱۵ دقیقه دیگر تلاش کنید." },
+});
+
+router.post("/admin/login", adminLoginLimiter, async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const email = typeof req.body.email === "string" ? req.body.email.trim().toLowerCase() : "";
+    const password = typeof req.body.password === "string" ? req.body.password : "";
         
     if (!email || !password) {
       return res.status(400).json({
@@ -699,9 +714,17 @@ router.post("/admin/login", async (req, res) => {
     admin.lastLoginIP = req.ip;
     await admin.save();
     
+    // New session id on privilege change (prevents session fixation). Keys of an
+    // existing storefront login in the same browser (userId, cart state...) are kept.
+    const preserved = { ...req.session };
+    delete preserved.cookie;
+    await regenerateSession(req);
+    Object.assign(req.session, preserved);
+
     // ذخیره در سشن
     req.session.adminId = admin._id;
     req.session.adminRole = admin.role;
+    req.session.adminCsrf = crypto.randomBytes(24).toString("base64url");
 
     const recentAction = new RecentAction({
       action: 'admin_login',

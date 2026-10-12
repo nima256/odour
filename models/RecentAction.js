@@ -24,12 +24,23 @@ const recentActionSchema = new mongoose.Schema(
         'update_weblog',
         'delete_weblog',
         'admin_login',
-        'admin_logout'
+        'admin_logout',
+        'update_order_shipping',
+        'adjust_inventory',
+        'import_inventory',
+        'create_banner',
+        'update_banner',
+        'delete_banner',
+        'update_customer',
+        'create_admin',
+        'update_admin',
+        'change_password',
+        'order_payment_action'
       ]
     },
     targetType: {
       type: String,
-      enum: ['product', 'category', 'brand', 'discount', 'order', 'weblog', 'admin'],
+      enum: ['product', 'category', 'brand', 'discount', 'order', 'weblog', 'admin', 'banner', 'customer'],
       required: true
     },
     targetId: {

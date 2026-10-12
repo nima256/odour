@@ -45,7 +45,8 @@ const discountCodeSchema = new mongoose.Schema(
       type: Number,
       min: [1, "محدودیت استفاده باید حداقل ۱ باشد"],
       validate: {
-        validator: Number.isInteger,
+        // Empty = unlimited (the admin form sends null for "no limit").
+        validator: (v) => v === null || v === undefined || Number.isInteger(v),
         message: "محدودیت استفاده باید عدد صحیح باشد",
       },
     },

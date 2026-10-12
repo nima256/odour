@@ -1,212 +1,84 @@
 <!DOCTYPE html>
 <html lang="fa" dir="rtl">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ورود به پنل مدیریت</title>
-    <!-- <link href="https://unpkg.com/tailwindcss@^2/dist/tailwind.min.css" rel="stylesheet"> -->
-     <link rel="stylesheet" href="/tailwind.min.css">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <style>
-        @font-face {
-            font-family: "MyFont";
-            src: url("/fonts/Vazirmatn-Light.ttf");
-            font-weight: 400;
-            font-style: normal;
-            font-display: swap;
-        }
-
-        body {
-            font-family: "MyFont", sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-        }
-        
-        .login-card {
-            background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(10px);
-            border-radius: 1rem;
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
-        }
-        
-        .input-field {
-            transition: all 0.3s ease;
-        }
-        
-        .input-field:focus {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-        }
-        
-        .login-btn {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            transition: all 0.3s ease;
-        }
-        
-        .login-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
-        }
-        
-        .error-message {
-            animation: shake 0.5s ease-in-out;
-        }
-        
-        @keyframes shake {
-            0%, 100% { transform: translateX(0); }
-            25% { transform: translateX(-5px); }
-            75% { transform: translateX(5px); }
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>ورود به پنل مدیریت اودر</title>
+  <link rel="stylesheet" href="/admin-assets/admin.css?v=<%= assetVersion %>">
 </head>
-<body class="flex items-center justify-center p-4">
-    <div class="login-card max-w-md w-full p-8">
-        <!-- Logo -->
-        <div class="text-center mb-8">
-            <div class="gradient-bg w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4"
-                 style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
-                <i class="fas fa-store text-white text-2xl"></i>
+<body class="oa">
+  <div class="oa-login">
+    <aside class="oa-login__art" aria-hidden="true">
+      <div class="oa-brand" style="padding:0">
+        <div class="oa-brand__mark">OD</div>
+        <div><div class="oa-brand__name" style="color:#f1ece3">ODOUR</div><div class="oa-brand__sub">Fragrance & Beauty</div></div>
+      </div>
+      <div>
+        <h2>هر رایحه، یک داستان؛ هر سفارش، یک تجربه.</h2>
+        <p>پنل مدیریت فروشگاه اودر — سفارش‌ها، کاتالوگ، موجودی و گزارش‌ها در یک جا.</p>
+      </div>
+      <span style="font-size:12px;color:rgba(241,236,227,.4)">© Odour</span>
+    </aside>
+    <main class="oa-login__form">
+      <form class="oa-login__card" id="login-form" novalidate>
+        <h1>ورود به پنل مدیریت</h1>
+        <p>با ایمیل و رمز عبور حساب مدیریت وارد شوید.</p>
+        <div class="oa-note oa-note--bad" id="login-error" role="alert" style="margin-bottom:16px<%= error ? '' : ';display:none' %>"><span id="login-error-text"><%= error %></span></div>
+        <div class="oa-stack" style="gap:14px">
+          <label class="oa-field"><span>ایمیل</span><input class="oa-input ltr" style="height:46px;text-align:left" type="email" name="email" id="email" autocomplete="username" required autofocus></label>
+          <label class="oa-field"><span>رمز عبور</span>
+            <div style="position:relative">
+              <input class="oa-input ltr" style="height:46px;text-align:left;padding-inline-end:44px" type="password" name="password" id="password" autocomplete="current-password" required>
+              <button type="button" class="oa-btn oa-btn--ghost oa-btn--icon oa-btn--sm" id="toggle-pw" style="position:absolute;top:7px;inset-inline-end:6px" aria-label="نمایش رمز عبور" aria-pressed="false">
+                <svg class="oa-icon oa-icon--sm" viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>
+              </button>
             </div>
-            <h1 class="text-2xl font-bold text-gray-800">فروشگاه زیبایی اودور</h1>
-            <p class="text-gray-500 mt-2">ورود به پنل مدیریت</p>
+          </label>
+          <button class="oa-btn oa-btn--primary" type="submit" id="submit" style="height:46px;width:100%">ورود</button>
         </div>
-        
-        <!-- Login Form -->
-        <form id="loginForm" class="space-y-6">
-            <div>
-                <label class="block text-sm font-semibold text-gray-700 mb-2">
-                    <i class="fas fa-envelope ml-1 text-gray-400"></i>
-                    نام کاربری یا ایمیل
-                </label>
-                <input type="text" id="username" name="username" required
-                    class="input-field w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                    placeholder="example@email.com">
-            </div>
-            
-            <div>
-                <label class="block text-sm font-semibold text-gray-700 mb-2">
-                    <i class="fas fa-lock ml-1 text-gray-400"></i>
-                    رمز عبور
-                </label>
-                <input type="password" id="password" name="password" required
-                    class="input-field w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                    placeholder="********">
-            </div>
-            
-            <button type="submit" 
-                class="login-btn w-full py-3 text-white rounded-lg font-semibold text-lg flex items-center justify-center space-x-reverse space-x-2">
-                <i class="fas fa-sign-in-alt"></i>
-                <span>ورود به پنل</span>
-            </button>
-        </form>
-        
-        <!-- Footer -->
-        <div class="mt-6 text-center">
-            <p class="text-xs text-gray-400">
-                این پنل فقط برای مدیران سیستم می‌باشد
-            </p>
-        </div>
-    </div>
-    
-    <!-- Toast Notification -->
-    <div id="toast" class="fixed top-4 left-1/2 transform -translate-x-1/2 bg-red-500 text-white px-6 py-3 rounded-lg shadow-lg hidden z-50">
-        <span id="toastMessage"></span>
-    </div>
-
-    <script>
-        // اعتبارنامه‌های پیش‌فرض (می‌توانید بعداً به API متصل کنید)
-        const VALID_CREDENTIALS = {
-            username: 'admin',
-            email: 'admin@example.com',
-            password: '123456'
-        };
-        
-        function showToast(message, isError = true) {
-            const toast = document.getElementById('toast');
-            const toastMessage = document.getElementById('toastMessage');
-            toastMessage.textContent = message;
-            toast.classList.remove('hidden');
-            
-            if (isError) {
-                toast.classList.remove('bg-green-500');
-                toast.classList.add('bg-red-500');
-            } else {
-                toast.classList.remove('bg-red-500');
-                toast.classList.add('bg-green-500');
-            }
-            
-            setTimeout(() => {
-                toast.classList.add('hidden');
-            }, 3000);
-        }
-
-        
-    document.getElementById('loginForm').addEventListener('submit', async function(e) {
+        <p style="margin:24px 0 0;font-size:12px" class="oa-muted">پس از چند تلاش ناموفق، ورود برای ۱۵ دقیقه محدود می‌شود.</p>
+      </form>
+    </main>
+  </div>
+  <script>
+    (function () {
+      var form = document.getElementById("login-form");
+      var btn = document.getElementById("submit");
+      var box = document.getElementById("login-error");
+      var text = document.getElementById("login-error-text");
+      var showError = function (msg) { text.textContent = msg; box.style.display = "flex"; };
+      document.getElementById("toggle-pw").addEventListener("click", function () {
+        var pw = document.getElementById("password");
+        var show = pw.type === "password";
+        pw.type = show ? "text" : "password";
+        this.setAttribute("aria-pressed", String(show));
+      });
+      form.addEventListener("submit", async function (e) {
         e.preventDefault();
-        
-        const username = document.getElementById('username').value.trim();
-        const password = document.getElementById('password').value;
-        
-        if (!username || !password) {
-            showToast('لطفاً نام کاربری و رمز عبور را وارد کنید');
-            return;
-        }
-        
-        // غیرفعال کردن دکمه لاگین
-        const submitBtn = this.querySelector('button[type="submit"]');
-        const originalText = submitBtn.innerHTML;
-        submitBtn.disabled = true;
-        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> در حال ورود...';
-        
+        var email = form.email.value.trim();
+        var password = form.password.value;
+        if (!email || !password) return showError("ایمیل و رمز عبور را وارد کنید.");
+        btn.disabled = true;
+        btn.setAttribute("aria-busy", "true");
         try {
-            const response = await fetch('/api/authentication/admin/login', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ email: username, password })
-            });
-            
-            const data = await response.json();
-            
-            if (data.success) {
-                showToast('ورود موفقیت‌آمیز! در حال انتقال...', false);
-                // ریدایرکت مستقیم به /admin
-                window.location.href = '/admin';
-            } else {
-                showToast(data.message);
-                document.querySelector('.login-card').classList.add('error-message');
-                setTimeout(() => {
-                    document.querySelector('.login-card').classList.remove('error-message');
-                }, 500);
-            }
-        } catch (error) {
-            console.error('Login error:', error);
-            showToast('خطا در ارتباط با سرور');
-        } finally {
-            submitBtn.disabled = false;
-            submitBtn.innerHTML = originalText;
+          var res = await fetch("/api/authentication/admin/login", {
+            method: "POST",
+            credentials: "same-origin",
+            headers: { "Content-Type": "application/json", Accept: "application/json" },
+            body: JSON.stringify({ email: email, password: password })
+          });
+          var data = {};
+          try { data = await res.json(); } catch (_) {}
+          if (res.ok && data.success) { location.href = "/admin"; return; }
+          showError(data.message || "ورود ناموفق بود.");
+        } catch (_) {
+          showError("ارتباط با سرور برقرار نشد.");
         }
-    });
-    
-    function showToast(message, isError = true) {
-        const toast = document.getElementById('toast');
-        const toastMessage = document.getElementById('toastMessage');
-        toastMessage.textContent = message;
-        toast.classList.remove('hidden');
-        
-        if (isError) {
-            toast.classList.remove('bg-green-500');
-            toast.classList.add('bg-red-500');
-        } else {
-            toast.classList.remove('bg-red-500');
-            toast.classList.add('bg-green-500');
-        }
-        
-        setTimeout(() => {
-            toast.classList.add('hidden');
-        }, 3000);
-    }
-</script>
+        btn.disabled = false;
+        btn.removeAttribute("aria-busy");
+      });
+    })();
+  </script>
 </body>
 </html>

@@ -26,6 +26,15 @@ const visitSchema = new mongoose.Schema(
     referer: {
       type: String,
     },
+    // Attribution (helper/attribution.js). Optional: visits recorded before this
+    // existed have none of these fields until scripts/backfill-visit-sources.js runs.
+    // entry=true marks the first page of a visit (arrived from outside the site).
+    entry: { type: Boolean },
+    source: { type: String },
+    medium: { type: String },
+    campaign: { type: String },
+    utmSource: { type: String },
+    referrerHost: { type: String },
     visitDate: {
       type: String,
       default: () => getPersianDate(),
@@ -40,6 +49,8 @@ const visitSchema = new mongoose.Schema(
     timestamps: true,
   }
 );
+
+visitSchema.index({ entry: 1, visitTimestamp: -1 });
 
 const Visit = mongoose.model("Visit", visitSchema);
 

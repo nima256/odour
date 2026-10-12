@@ -14,6 +14,7 @@ const ZarinPal = require("zarinpal-checkout");
 const snappPayService = require("../services/snappPayService");
 const torobPayService = require("../services/torobPayService");
 const { notifyRegisteredOrder } = require("../services/orderNotifications");
+const { acquisitionSnapshot } = require("../helper/attribution");
 const {
   reconcilerConfig,
   resolveSnappPayAction,
@@ -1064,6 +1065,8 @@ router.post("/", upload.none(), isLoggedIn, validateOrderInput, async (req, res)
       paymentStatus: "پرداخت نشده",
       inventoryReserved: false,
       inventoryRestored: false,
+      // Marketing attribution only (never throws, undefined when not tracked).
+      acquisition: acquisitionSnapshot(req),
     });
     await order.save();
 
