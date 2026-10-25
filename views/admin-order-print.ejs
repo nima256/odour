@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,nofollow,noarchive">
+  <title><%= document.invoice ? 'فاکتور فروش' : 'برگه بسته‌بندی' %> - سفارش <%= document.orderNumber %> | ODOUR</title>
+  <style>
+    @font-face { font-family: Vazirmatn; src: url('/admin/fonts/vazirmatn/Vazirmatn-Regular.woff2') format('woff2'); font-weight: 400; font-display: swap; }
+    @font-face { font-family: Vazirmatn; src: url('/admin/fonts/vazirmatn/Vazirmatn-Bold.woff2') format('woff2'); font-weight: 700; font-display: swap; }
+    :root { color-scheme: light; --ink:#252820; --muted:#697068; --line:#e1e4dc; --olive:#484f32; --paper:#fff; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:#eff0eb; color:var(--ink); font:13px/1.9 Vazirmatn, Tahoma, sans-serif; }
+    .toolbar { position:sticky; top:0; z-index:2; display:flex; justify-content:center; gap:10px; padding:14px; background:#22271f; color:white; }
+    .toolbar button,.toolbar a { cursor:pointer; border:1px solid #4c5847; border-radius:8px; padding:7px 17px; font:600 13px Vazirmatn,Tahoma,sans-serif; color:#fff; background:#394332; text-decoration:none; }
+    .toolbar button { background:#dde2c8; color:#273023; border-color:#dde2c8; }
+    .paper { width:210mm; min-height:297mm; margin:24px auto; padding:18mm 17mm; background:var(--paper); box-shadow:0 12px 42px #1d291b16; }
+    body.packing .paper { width:148mm; min-height:210mm; padding:13mm 11mm; }
+    .head { display:flex; align-items:center; justify-content:space-between; gap:20px; padding-bottom:22px; border-bottom:3px solid var(--olive); }
+    .brand { font:700 30px/1.05 Arial,sans-serif; letter-spacing:5px; color:var(--olive); direction:ltr; }
+    .brand-sub { font-size:10px; color:var(--muted); letter-spacing:1px; margin-top:7px; }
+    .doctype { font-size:20px; font-weight:700; text-align:left; }
+    .muted { color:var(--muted); }
+    .kicker { font-size:10px; font-weight:700; letter-spacing:.2px; color:var(--muted); }
+    .meta { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:9px 24px; padding:18px 0; border-bottom:1px solid var(--line); }
+    .field { min-width:0; display:flex; align-items:baseline; gap:8px; overflow-wrap:anywhere; }
+    .field .name { color:var(--muted); white-space:nowrap; font-size:11px; }
+    .field strong { font-weight:700; }
+    .latin { direction:ltr; unicode-bidi:isolate; display:inline-block; font-variant-numeric:tabular-nums; }
+    .panel { margin-top:16px; padding:12px 14px; border:1px solid var(--line); border-radius:7px; background:#fdfdfa; break-inside:avoid; }
+    .panel h2, .section-title { font-size:12px; font-weight:700; color:var(--olive); margin:0 0 9px; }
+    .address { overflow-wrap:anywhere; white-space:pre-wrap; line-height:2.1; }
+    .lines { width:100%; margin-top:17px; border-collapse:collapse; font-size:12px; table-layout:fixed; }
+    .lines th { background:#e8eadf; color:#2f3927; font-weight:700; padding:8px 7px; text-align:right; border-bottom:1px solid #cbd2c0; }
+    .lines td { padding:11px 7px; border-bottom:1px solid var(--line); vertical-align:top; overflow-wrap:anywhere; }
+    .lines .center { text-align:center; }
+    .lines .number { text-align:left; white-space:nowrap; font-variant-numeric:tabular-nums; }
+    .lines tbody tr { break-inside:avoid; }
+    .item-name { font-weight:700; }
+    .item-extra { display:block; font-size:10px; color:var(--muted); margin-top:3px; }
+    .old-price { display:block; font-size:10px; text-decoration:line-through; color:var(--muted); }
+    .totals { width:60%; margin:16px 0 0 auto; }
+    .total-row { display:flex; justify-content:space-between; gap:12px; padding:3px 0; }
+    .total-row > span:first-child { color:var(--muted); }
+    .total-row .amount { direction:ltr; unicode-bidi:isolate; font-variant-numeric:tabular-nums; }
+    .total-row.grand { padding:9px 0; margin-top:10px; border-top:2px solid var(--olive); font-size:16px; font-weight:700; }
+    .total-row.grand > span:first-child { color:var(--ink); }
+    .foot { margin-top:24px; border-top:1px solid var(--line); padding-top:10px; font-size:10px; color:var(--muted); }
+    .packing .head { padding-bottom:14px; }
+    .packing .brand { font-size:25px; }
+    .packing .doctype { font-size:17px; }
+    .packing .meta { gap:5px 10px; padding:11px 0; }
+    .packing .panel { margin-top:12px; padding:10px 12px; }
+    .packing .lines { margin-top:12px; font-size:11px; }
+    .packing .lines td { padding:9px 5px; }
+    .packing .lines th { padding:7px 5px; }
+    .check { display:inline-block; border:1.5px solid #747c72; width:16px; height:16px; border-radius:3px; vertical-align:middle; }
+    .packing-total { margin-top:13px; padding:9px 12px; display:flex; justify-content:space-between; background:#f0f2e9; font-weight:700; break-inside:avoid; }
+    .checks { display:flex; gap:20px; flex-wrap:wrap; margin-top:18px; color:var(--muted); font-size:11px; }
+    .checks span { white-space:nowrap; }
+    .checks .check { margin-left:5px; }
+    .packing .foot { margin-top:15px; }
+    @page { size:A4 portrait; margin:0; }
+    @media print {
+      html,body { background:white!important; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+      .toolbar { display:none!important; }
+      .paper,.packing .paper { box-shadow:none; margin:0; }
+      .paper { width:210mm; min-height:0; }
+      .packing .paper { width:148mm; min-height:0; }
+    }
+    @media screen and (max-width:850px) {
+      .paper,.packing .paper { width:100%; min-height:100vh; margin:0; padding:20px 16px; }
+      .head { gap:10px; }
+      .doctype { font-size:16px; }
+      .brand { font-size:22px; }
+      .totals { width:100%; }
+    }
+  </style>
+  <% if (!document.invoice) { %><style>@page { size:A5 portrait; margin:0; }</style><% } %>
+</head>
+<body class="<%= document.invoice ? 'invoice' : 'packing' %>">
+  <div class="toolbar" aria-label="ابزار چاپ">
+    <button type="button" onclick="window.print()">چاپ <%= document.invoice ? 'فاکتور' : 'بسته‌بندی' %></button>
+    <a href="/admin" target="_self">بازگشت به پنل</a>
+  </div>
+  <main class="paper">
+    <header class="head">
+      <div>
+        <div class="brand">ODOUR</div>
+        <div class="brand-sub">ORDER DOCUMENT</div>
+      </div>
+      <div>
+        <div class="doctype"><%= document.invoice ? 'فاکتور فروش' : 'برگه بسته‌بندی' %></div>
+        <div class="muted">شماره سفارش: <strong class="latin"><%= document.orderNumber %></strong></div>
+      </div>
+    </header>
+    <div class="meta">
+      <div class="field"><span class="name">تاریخ سفارش:</span><strong><%= document.orderDate %></strong></div>
+      <div class="field"><span class="name">تاریخ چاپ:</span><span><%= document.printedAt %></span></div>
+      <div class="field"><span class="name">وضعیت سفارش:</span><span><%= document.status %></span></div>
+      <div class="field"><span class="name">روش ارسال:</span><span><%= document.delivery %></span></div>
+      <% if (document.invoice) { %>
+        <div class="field"><span class="name">روش پرداخت:</span><span><%= document.paymentMethod %></span></div>
+        <div class="field"><span class="name">وضعیت پرداخت:</span><strong><%= document.paymentStatus %></strong></div>
+      <% } else if (document.trackingNumber !== '—') { %>
+        <div class="field"><span class="name">کد رهگیری:</span><strong class="latin"><%= document.trackingNumber %></strong></div>
+      <% } %>
+    </div>
+    <section class="panel">
+      <h2><%= document.invoice ? 'مشخصات خریدار و گیرنده' : 'مشخصات گیرنده مرسوله' %></h2>
+      <% if (document.invoice) { %><div class="field"><span class="name">خریدار:</span><strong><%= document.customer %></strong> <span class="latin"><%= document.customerMobile %></span></div><% } %>
+      <div class="field"><span class="name">گیرنده:</span><strong><%= document.recipient %></strong></div>
+      <div class="field"><span class="name">شماره تماس:</span><strong class="latin"><%= document.recipientMobile %></strong></div>
+      <div class="field"><span class="name">استان / شهر:</span><span><%= [document.province, document.city].filter(Boolean).join(' / ') || '—' %></span></div>
+      <div class="field"><span class="name">کد پستی:</span><strong class="latin"><%= document.postcode %></strong></div>
+      <div class="address"><span class="name muted">آدرس: </span><%= document.address %></div>
+    </section>
+    <table class="lines" aria-label="اقلام سفارش">
+      <colgroup>
+        <% if (!document.invoice) { %>
+          <col style="width:9%"><col style="width:11%"><col style="width:61%"><col style="width:19%">
+        <% } else { %>
+          <col style="width:8%"><col style="width:43%"><col style="width:9%"><col style="width:20%"><col style="width:20%">
+        <% } %>
+      </colgroup>
+      <thead><tr>
+        <% if (!document.invoice) { %><th>تأیید</th><% } %>
+        <th>ردیف</th><th>کالا و مشخصات</th><th class="center">تعداد</th>
+        <% if (document.invoice) { %><th class="number">فی (تومان)</th><th class="number">جمع (تومان)</th><% } %>
+      </tr></thead>
+      <tbody>
+        <% document.items.forEach((item) => { %>
+        <tr>
+          <% if (!document.invoice) { %><td><span class="check" aria-label="چک‌لیست"></span></td><% } %>
+          <td><%= document.formatQty(item.row) %></td>
+          <td>
+            <div class="item-name"><%= item.name %></div>
+            <% if (item.color || item.size) { %>
+            <span class="item-extra"><%= [item.color && 'رنگ: ' + item.color, item.size && 'سایز / حجم: ' + item.size].filter(Boolean).join(' | ') %></span>
+            <% } %>
+            <% if (item.sku !== '—') { %><span class="item-extra">کد کالا: <b class="latin"><%= item.sku %></b></span><% } %>
+          </td>
+          <td class="center"><strong><%= document.formatQty(item.quantity) %></strong></td>
+          <% if (document.invoice) { %>
+            <td class="number">
+              <% if (item.originalUnitPrice !== null) { %><span class="old-price"><%= document.formatMoney(item.originalUnitPrice) %></span><% } %>
+              <%= document.formatMoney(item.unitPrice) %>
+            </td>
+            <td class="number"><strong><%= document.formatMoney(item.subtotal) %></strong></td>
+          <% } %>
+        </tr>
+        <% }); %>
+      </tbody>
+    </table>
+    <% if (document.invoice) { %>
+      <div class="totals">
+        <div class="total-row"><span>جمع کالاها</span><span class="amount"><%= document.formatMoney(document.itemsSum) %> تومان</span></div>
+        <% if (document.discount) { %><div class="total-row"><span>تخفیف <%= document.discountCode ? '(' + document.discountCode + ')' : '' %></span><span class="amount">− <%= document.formatMoney(document.discount) %></span></div><% } %>
+        <% if (document.tax) { %><div class="total-row"><span>مالیات ثبت‌شده</span><span class="amount">+ <%= document.formatMoney(document.tax) %></span></div><% } %>
+        <% if (document.external) { %><div class="total-row"><span>کسر منبع پرداخت خارجی</span><span class="amount">− <%= document.formatMoney(document.external) %></span></div><% } %>
+        <% if (document.difference) { %><div class="total-row"><span>تفاوت ثبت‌شده در مبلغ سفارش</span><span class="amount"><%= document.difference > 0 ? '+' : '−' %> <%= document.formatMoney(Math.abs(document.difference)) %></span></div><% } %>
+        <div class="total-row grand"><span>مبلغ نهایی سفارش</span><span class="amount"><%= document.formatMoney(document.total) %> تومان</span></div>
+      </div>
+      <div class="foot">اقلام و قیمت‌ها طبق اطلاعات ثبت‌شده در زمان خرید هستند. هزینه ارسال در مبلغ نهایی فوق ثبت نشده است. این برگه، فاکتور فروش فروشگاه است.</div>
+    <% } else { %>
+      <div class="packing-total"><span>جمع اقلام جهت بسته‌بندی</span><span><%= document.formatQty(document.quantityTotal) %> عدد</span></div>
+      <div class="checks">
+        <span><span class="check"></span> اقلام تطبیق داده شد</span>
+        <span><span class="check"></span> بسته‌بندی تکمیل شد</span>
+        <span><span class="check"></span> تحویل به حمل‌کننده</span>
+      </div>
+      <div class="foot">برگه مخصوص انبار و ارسال — فاقد اطلاعات قیمت جهت حفظ حریم خرید مشتری.</div>
+    <% } %>
+  </main>
+  <% if (autoPrint) { %>
+    <script>
+      window.addEventListener('load', function () {
+        if (document.fonts && document.fonts.ready) document.fonts.ready.then(function () { window.print(); });
+        else window.print();
+      });
+    </script>
+  <% } %>
+</body>
+</html>

@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="csrf-token" content="<%= csrfToken %>">
+  <meta name="theme-color" content="#3b3b22">
+  <title>Odour Control</title>
+  <link rel="preload" href="/admin/fonts/vazirmatn/Vazirmatn-Regular.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/admin-assets/admin.css?v=<%= assetVersion %>">
+  <script>try { document.documentElement.dataset.rail = localStorage.getItem("ox-rail") || "collapsed"; } catch (_) {}</script>
+</head>
+<body class="ox" data-rail="collapsed">
+  <script>document.body.dataset.rail = document.documentElement.dataset.rail || "collapsed";</script>
+  <%- include('./partials/admin/icons') %>
+  <a class="sr-only" href="#ox-main">پرش به محتوا</a>
+
+  <aside class="ox-rail" id="ox-rail" aria-label="ناوبری اصلی">
+    <div class="ox-rail__top">
+      <div class="ox-mark" aria-hidden="true">O</div>
+      <div class="ox-rail__brand"><b>ODOUR</b><span>CONTROL</span></div>
+      <button class="ox-btn ox-btn--ghost ox-btn--sm ox-btn--icon ox-rail__toggle" type="button" id="ox-rail-toggle" aria-label="باز و بسته کردن منو" aria-expanded="false" style="color:#e4e1cc">
+        <svg class="ox-i ox-i--s"><use href="#i-panel"/></svg>
+      </button>
+    </div>
+    <nav class="ox-rail__nav" id="ox-nav"></nav>
+    <div class="ox-rail__foot">
+      <button class="ox-rail__me" type="button" id="ox-me" aria-haspopup="menu" aria-expanded="false" data-tip="<%= adminBoot.admin.fullName %>">
+        <span class="ox-avatar" aria-hidden="true"><%= (adminBoot.admin.fullName || 'A').trim().charAt(0) %></span>
+        <span class="ox-rail__who"><b><%= adminBoot.admin.fullName %></b><span><%= adminBoot.admin.role === 'super_admin' ? 'مدیر ارشد' : 'مدیر' %></span></span>
+      </button>
+      <div class="ox-pop" id="ox-me-menu" role="menu" style="bottom:calc(100% + 6px);inset-inline-start:14px">
+        <a class="ox-menu-item" role="menuitem" href="#/account"><svg class="ox-i ox-i--s"><use href="#i-user"/></svg>حساب من</a>
+        <a class="ox-menu-item" role="menuitem" href="/" target="_blank" rel="noopener"><svg class="ox-i ox-i--s"><use href="#i-external"/></svg>مشاهده فروشگاه</a>
+        <div class="ox-menu-sep"></div>
+        <button class="ox-menu-item ox-menu-item--danger" role="menuitem" type="button" data-logout><svg class="ox-i ox-i--s"><use href="#i-logout"/></svg>خروج از حساب</button>
+      </div>
+    </div>
+  </aside>
+  <div class="ox-scrim" id="ox-scrim"></div>
+
+  <div class="ox-app">
+    <header class="ox-header" id="ox-header">
+      <div class="ox-row ox-row--nowrap" style="gap:12px;min-width:0">
+        <button class="ox-btn ox-btn--ghost ox-btn--icon ox-header__menu" type="button" id="ox-menu" aria-label="باز کردن منو" aria-controls="ox-rail" aria-expanded="false">
+          <svg class="ox-i"><use href="#i-menu"/></svg>
+        </button>
+        <div class="ox-header__title">
+          <div class="ox-header__crumb" id="ox-crumb"></div>
+          <div class="ox-header__h" id="ox-title">داشبورد</div>
+        </div>
+      </div>
+      <div class="ox-header__search">
+        <button class="ox-search-trigger" type="button" id="ox-search" aria-label="جستجو در سفارش‌ها، محصولات، مشتریان و بخش‌ها">
+          <svg class="ox-i"><use href="#i-search"/></svg>
+          <span>جستجوی سفارش، محصول، مشتری یا بخش…</span>
+          <span class="ox-kbd">Ctrl K</span>
+        </button>
+      </div>
+      <div class="ox-header__tools">
+        <span class="ox-header__quick" id="ox-quick"></span>
+        <button class="ox-btn ox-btn--ghost ox-btn--icon ox-header__msearch" type="button" id="ox-search-m" aria-label="جستجو"><svg class="ox-i"><use href="#i-search"/></svg></button>
+        <a class="ox-btn ox-btn--ghost ox-btn--icon ox-header__store" href="/" target="_blank" rel="noopener" aria-label="مشاهده فروشگاه" title="مشاهده فروشگاه"><svg class="ox-i"><use href="#i-store"/></svg></a>
+        <div style="position:relative" id="ox-notify">
+          <button class="ox-btn ox-btn--ghost ox-btn--icon" type="button" id="ox-bell" aria-haspopup="true" aria-expanded="false" aria-label="اعلان‌ها" style="position:relative">
+            <svg class="ox-i"><use href="#i-bell"/></svg><span class="ox-dot" id="ox-bell-dot" hidden></span>
+          </button>
+          <div class="ox-pop ox-notify" id="ox-notify-panel" role="dialog" aria-label="اعلان‌ها"></div>
+        </div>
+      </div>
+    </header>
+    <main class="ox-main" id="ox-main" tabindex="-1"></main>
+  </div>
+
+  <nav class="ox-tabbar" id="ox-tabbar" aria-label="ناوبری سریع"></nav>
+  <div class="ox-toasts" id="ox-toasts" role="status" aria-live="polite"></div>
+
+  <script id="ox-boot" type="application/json"><%- JSON.stringify(adminBoot).replace(/</g, '\\u003c') %></script>
+  <script src="/admin-assets/js/core.js?v=<%= assetVersion %>" defer></script>
+  <script src="/admin-assets/js/charts.js?v=<%= assetVersion %>" defer></script>
+  <script src="/admin-assets/js/dashboard.js?v=<%= assetVersion %>" defer></script>
+  <script src="/admin-assets/js/analytics.js?v=<%= assetVersion %>" defer></script>
+  <script src="/admin-assets/js/orders.js?v=<%= assetVersion %>" defer></script>
+  <script src="/admin-assets/js/products.js?v=<%= assetVersion %>" defer></script>
+  <script src="/admin-assets/js/inventory.js?v=<%= assetVersion %>" defer></script>
+  <script src="/admin-assets/js/customers.js?v=<%= assetVersion %>" defer></script>
+  <script src="/admin-assets/js/catalog.js?v=<%= assetVersion %>" defer></script>
+  <script src="/admin-assets/js/marketing.js?v=<%= assetVersion %>" defer></script>
+  <script src="/admin-assets/js/content.js?v=<%= assetVersion %>" defer></script>
+  <script src="/admin-assets/js/team.js?v=<%= assetVersion %>" defer></script>
+  <script src="/admin-assets/js/boot.js?v=<%= assetVersion %>" defer></script>
+  <!-- چاپ فاکتور و برگه بسته بندی: بدون وابستگی به پاسخ API یا فایل JS جداگانه -->
+  <script>
+    (function () {
+      'use strict';
+      var main = document.getElementById('ox-main');
+      var bootElement = document.getElementById('ox-boot');
+      if (!main || !bootElement) return;
+      var boot;
+      try { boot = JSON.parse(bootElement.textContent || '{}'); }
+      catch (_) { return; }
+      if (!Array.isArray(boot.permissions) || boot.permissions.indexOf('manage_orders') < 0) return;
+
+      var style = document.createElement('style');
+      style.textContent =
+        '.ox-order-print-bar{display:flex;align-items:center;flex-wrap:wrap;gap:10px;' +
+        'background:#f6f5ec;border:1px solid #cfccae;border-radius:10px;padding:13px 16px;' +
+        'margin:0 0 18px;position:sticky;top:8px;z-index:20;box-sizing:border-box;' +
+        'box-shadow:0 3px 10px rgba(48,47,35,.06);direction:rtl}' +
+        '.ox-order-print-bar__title{font:600 13px Vazirmatn,Tahoma,sans-serif;color:#3b3b22;' +
+        'margin-inline-end:auto}' +
+        '.ox-order-print-bar__action{font:600 13px Vazirmatn,Tahoma,sans-serif;' +
+        'display:inline-flex;align-items:center;justify-content:center;gap:6px;' +
+        'padding:9px 14px;border-radius:8px;text-decoration:none!important;' +
+        'border:1px solid #636337;background:#636337;color:#fff!important;white-space:nowrap}' +
+        '.ox-order-print-bar__action--outline{background:white;color:#3b3b22!important;' +
+        'border-color:#b5b38e}' +
+        '.ox-order-print-bar__action:focus-visible{outline:3px solid #9c9b70;outline-offset:3px}' +
+        '@media(max-width:600px){.ox-order-print-bar{position:relative;top:auto;padding:12px}' +
+        '.ox-order-print-bar__title{width:100%}.ox-order-print-bar__action{flex:1;padding:9px 8px}}';
+      document.head.appendChild(style);
+
+      var bar = null;
+      var barOrderId = '';
+      var queued = false;
+      function orderIdFromRoute() {
+        // مسیر واقعی جزئیات سفارش در Odour: /admin#/orders/<MongoDB ObjectId>
+        var found = /^#\/orders\/([a-f0-9]{24})(?=$|[/?])/i.exec(window.location.hash || '');
+        return found ? found[1] : '';
+      }
+      function button(label, type, orderId) {
+        var anchor = document.createElement('a');
+        anchor.className = 'ox-order-print-bar__action' + (type === 'invoice' ? ' ox-order-print-bar__action--outline' : '');
+        anchor.textContent = label;
+        anchor.href = '/admin/orders/' + encodeURIComponent(orderId) + '/print/' + type + '?autoprint=1';
+        anchor.target = '_blank';
+        anchor.rel = 'noopener noreferrer';
+        return anchor;
+      }
+      function syncPrintButtons() {
+        var id = orderIdFromRoute();
+        if (!id) {
+          if (bar) bar.remove();
+          bar = null;
+          barOrderId = '';
+          return;
+        }
+        if (!bar || barOrderId !== id) {
+          if (bar) bar.remove();
+          bar = document.createElement('div');
+          bar.className = 'ox-order-print-bar';
+          bar.setAttribute('role', 'group');
+          bar.setAttribute('aria-label', 'چاپ مدارک سفارش');
+          bar.setAttribute('data-order-print-id', id);
+          var title = document.createElement('span');
+          title.className = 'ox-order-print-bar__title';
+          title.textContent = 'اسناد این سفارش';
+          bar.appendChild(title);
+          bar.appendChild(button('چاپ برگه بسته‌بندی', 'packing', id));
+          bar.appendChild(button('چاپ فاکتور', 'invoice', id));
+          barOrderId = id;
+        }
+        // رابط پنل ممکن است کل صفحه را هنگام دریافت اطلاعات سفارش دوباره بسازد.
+        // بعد از هر بازنویسی، نوار چاپ بالای صفحه جزئیات درج می‌شود.
+        if (main.firstElementChild !== bar) main.insertBefore(bar, main.firstChild);
+      }
+      function scheduleSync() {
+        if (queued) return;
+        queued = true;
+        window.requestAnimationFrame(function () {
+          queued = false;
+          syncPrintButtons();
+        });
+      }
+      new MutationObserver(scheduleSync).observe(main, { childList: true });
+      window.addEventListener('hashchange', scheduleSync);
+      window.addEventListener('popstate', scheduleSync);
+      scheduleSync();
+    })();
+  </script>
+</body>
+</html>

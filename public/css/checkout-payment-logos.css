@@ -1,0 +1,119 @@
+/* Checkout-only gateway logo alignment: RTL radio -> logo -> copy. */
+.od-choice--payment-logo { gap: 12px; }
+.od-choice--payment-logo .od-payment-logo {
+  display: grid;
+  place-items: center;
+  flex: 0 0 40px;
+  width: 40px;
+  height: 40px;
+}
+.od-choice--payment-logo .od-payment-logo > img {
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: 40px;
+  max-height: 40px;
+  object-fit: contain;
+}
+.od-choice--payment-logo .od-choice__text,
+.od-choice--payment-logo .od-snapppay-gw__text { flex: 1; min-width: 0; }
+.od-choice--payment-logo .od-payment-logo--snappay .od-snapppay-logo,
+.od-choice--payment-logo .od-payment-logo--snappay .od-snapppay-logo img {
+  width: 40px;
+  height: 40px;
+  margin: 0;
+}
+@media (max-width: 479.98px) {
+  .od-choice--payment-logo { gap: 10px; padding-inline: 12px; }
+  .od-choice--payment-logo .od-payment-logo {
+    flex-basis: 32px;
+    width: 32px;
+    height: 32px;
+  }
+  .od-choice--payment-logo .od-payment-logo > img {
+    max-width: 32px;
+    max-height: 32px;
+  }
+  .od-choice--payment-logo .od-payment-logo--snappay .od-snapppay-logo,
+  .od-choice--payment-logo .od-payment-logo--snappay .od-snapppay-logo img {
+    width: 32px;
+    height: 32px;
+  }
+}
+
+/* Temporary SnappPay contact-only checkout. Scoped to the checkout page. */
+.od-choice[hidden], .od-checking[hidden] { display: none !important; }
+.od-choice--snappay-contact { border-color: #80bfae; }
+.od-choice--snappay-contact .od-snapppay-gw__title { color: #1a1c23; }
+.od-choice--snappay-contact .od-snapppay-gw__desc { color: #616475; }
+.od-snappay-contact-dialog {
+  position: fixed;
+  inset: 0;
+  box-sizing: border-box;
+  width: min(420px, calc(100vw - 32px));
+  max-width: none;
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+  margin: auto;
+  padding: 30px 24px 24px;
+  border: 1px solid var(--od-line-2, #e8e5df);
+  border-radius: 22px;
+  background: var(--od-surface, #fff);
+  color: var(--od-ink, #262622);
+  box-shadow: 0 24px 72px rgba(19, 32, 25, .22);
+  text-align: center;
+  font-family: inherit;
+  line-height: 1.9;
+}
+.od-snappay-contact-dialog::backdrop { background: rgba(20, 30, 26, .57); backdrop-filter: blur(3px); }
+.od-snappay-contact-dialog__close {
+  position: absolute;
+  inset-block-start: 12px;
+  inset-inline-end: 14px;
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--od-surface-2, #f5f5f3);
+  color: var(--od-ink-2, #54544d);
+  cursor: pointer;
+  font: inherit;
+  font-size: 26px;
+  line-height: 1;
+}
+.od-snappay-contact-dialog__icon {
+  display: grid;
+  place-items: center;
+  width: 62px;
+  height: 62px;
+  margin: 0 auto 12px;
+  border-radius: 50%;
+  background: #e6f4ef;
+  color: #177c5b;
+}
+.od-snappay-contact-dialog__icon .od-icon { width: 26px; height: 26px; }
+.od-snappay-contact-dialog h2 { margin: 0 0 12px; font-size: 20px; font-weight: 750; }
+.od-snappay-contact-dialog p { margin: 0; font-size: 13.5px; color: var(--od-ink-2, #5b5b55); }
+.od-snappay-contact-dialog__phone {
+  display: block;
+  width: fit-content;
+  margin: 18px auto;
+  padding: 8px 20px;
+  border-radius: 12px;
+  background: #e6f4ef;
+  color: #176b52;
+  text-decoration: none;
+  font-size: 20px;
+  font-weight: 750;
+  letter-spacing: 1px;
+}
+.od-snappay-contact-dialog .od-btn { margin-block-start: 10px; justify-content: center; }
+.od-snappay-contact-dialog .od-btn .od-icon { width: 19px; height: 19px; }
+.od-snappay-contact-dialog .od-snappay-contact-dialog__note {
+  margin-block-start: 14px;
+  font-size: 11.5px;
+  color: var(--od-ink-3, #8a8a85);
+}
+@media (max-width: 479.98px) {
+  .od-snappay-contact-dialog { padding-inline: 18px; border-radius: 18px; }
+}
